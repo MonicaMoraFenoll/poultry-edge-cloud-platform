@@ -1,0 +1,88 @@
+name: Simulate Edge Provisioning
+
+on:
+  workflow_dispatch:
+    inputs:
+      farm:
+        description: Farm configuration to provision
+        required: true
+        type: choice
+        default: farm_01
+        options:
+          - farm_01
+          - farm_02
+
+  pull_request:
+    paths:
+      - "edge/config/**"
+      - "edge/deployment/install_edge.sh"
+      - ".github/workflows/simulate-edge-provisioning.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  provision-edge:
+    name: Provision simulated Edge
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make installer executable
+        run: chmod +x edge/deployment/install_edge.sh
+
+      - name: Provision simulated Edge
+        run: |
+          edge/deployment/install_edge.sh \
+            --config "edge/config/${{ inputs.farm || 'farm_01' }}.yml" \
+            --install-root "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}"
+
+      - name: Validate installed configuration
+        run: |
+          test -f \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}/config/edge.yaml"
+
+      - name: Validate persistent directories
+        run: |
+          test -d \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}/data/images"
+
+          test -d \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}/data/outputs"
+
+          test -d \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}/data/models"
+
+      - name: Verify configured farm
+        run: |
+          grep \
+            "id: ${{ inputs.farm || 'farm_01' }}" \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}/config/edge.yaml"
+
+      - name: Show provisioned Edge structure
+        run: |
+          echo
+          echo "Provisioned Edge structure:"
+          echo
+
+          find \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}" \
+            -maxdepth 3 \
+            -print
+
+      - name: Prepare provisioning evidence
+        run: |
+          mkdir -p provisioning-evidence
+
+          cp -r \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm || 'farm_01' }}" \
+            provisioning-evidence/
+
+      - name: Upload provisioning evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-provisioning-${{ inputs.farm || 'farm_01' }}
+          path: provisioning-evidence/
+          if-no-files-found: error
