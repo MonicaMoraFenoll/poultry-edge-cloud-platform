@@ -7,6 +7,7 @@ on:
       - "edge/Dockerfile"
       - "edge/requirements-pro.txt"
       - "edge/pyproject.toml"
+      - ".github/workflows/build-edge-image.yml"
 
   workflow_dispatch:
 
