@@ -15,13 +15,10 @@ permissions:
   packages: write
 
 jobs:
-
   build-image:
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -39,5 +36,5 @@ jobs:
           file: ./edge/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/poultry-edge:latest
-            ghcr.io/${{ github.repository_owner }}/poultry-edge:${{ github.sha }}
+            ghcr.io/monicamorafenoll/poultry-edge:latest
+            ghcr.io/monicamorafenoll/poultry-edge:${{ github.sha }}
