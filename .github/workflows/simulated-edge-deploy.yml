@@ -23,18 +23,14 @@ permissions:
   packages: read
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/poultry-edge
+  IMAGE_NAME: ghcr.io/monicamorafenoll/poultry-edge
 
 jobs:
-
   deploy:
-
     name: Simulate Docker deployment
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -47,18 +43,19 @@ jobs:
 
       - name: Pull Docker image
         run: |
-          docker pull \
-            "${IMAGE_NAME}:${{ inputs.image_tag }}"
+          docker pull "${IMAGE_NAME}:${{ inputs.image_tag }}"
 
       - name: Create simulated Edge
         run: |
-          mkdir -p \
-            "${{ runner.temp }}/poultry-edge/env"
+          mkdir -p "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env"
 
       - name: Configure deployed image
         run: |
+          echo "FARM_ID=${{ inputs.farm }}" \
+            > "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env/poultry-edge.env"
+
           echo "POULTRY_EDGE_IMAGE=${IMAGE_NAME}:${{ inputs.image_tag }}" \
-            > "${{ runner.temp }}/poultry-edge/env/poultry-edge.env"
+            >> "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env/poultry-edge.env"
 
       - name: Show deployed configuration
         run: |
@@ -66,8 +63,7 @@ jobs:
           echo "Simulated Edge:"
           echo
 
-          cat \
-            "${{ runner.temp }}/poultry-edge/env/poultry-edge.env"
+          cat "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env/poultry-edge.env"
 
       - name: Verify Docker image
         run: |
@@ -78,20 +74,20 @@ jobs:
       - name: Show simulated Edge structure
         run: |
           echo
-          echo "Simulated Edge structure"
+          echo "Simulated Edge structure:"
           echo
 
           find \
-            "${{ runner.temp }}/poultry-edge" \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}" \
             -maxdepth 3 \
             -print
 
       - name: Prepare deployment evidence
         run: |
-          mkdir deployment-evidence
+          mkdir -p deployment-evidence
 
           cp -r \
-            "${{ runner.temp }}/poultry-edge" \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}" \
             deployment-evidence/
 
       - name: Upload deployment evidence
@@ -99,3 +95,4 @@ jobs:
         with:
           name: edge-deployment-${{ inputs.farm }}
           path: deployment-evidence/
+          if-no-files-found: error
