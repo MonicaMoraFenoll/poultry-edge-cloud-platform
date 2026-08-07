@@ -11,12 +11,15 @@ on:
         options:
           - farm_01
           - farm_02
+  push:
+    paths:
+      - ".github/workflows/simulated-edge-provisioning.yml"
 
   pull_request:
     paths:
       - "edge/config/**"
       - "edge/deployment/install_edge.sh"
-      - ".github/workflows/simulate-edge-provisioning.yml"
+      - ".github/workflows/simulated-edge-provisioning.yml"
 
 permissions:
   contents: read

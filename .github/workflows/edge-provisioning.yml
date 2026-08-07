@@ -1,0 +1,85 @@
+name: Provision Edge
+
+on:
+  workflow_dispatch:
+    inputs:
+      farm:
+        description: Edge device to provision
+        required: true
+        type: choice
+        default: farm_01
+        options:
+          - farm_01
+          - farm_02
+
+permissions:
+  contents: read
+
+jobs:
+
+  provision-farm-01:
+    if: ${{ inputs.farm == 'farm_01' }}
+
+    name: Provision farm_01
+
+    runs-on:
+      - self-hosted
+      - edge
+      - farm_01
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make deployment scripts executable
+        run: |
+          chmod +x edge/deployment/install_edge.sh
+          chmod +x edge/deployment/run_edge.sh
+
+      - name: Provision Edge
+        run: |
+          sudo edge/deployment/install_edge.sh \
+            --config edge/config/farm_01.yml
+
+      - name: Show installed Edge structure
+        run: |
+          echo
+          echo "Installed Edge structure:"
+          echo
+          sudo find /opt/poultry-edge \
+            -maxdepth 3 \
+            -print
+
+
+  provision-farm-02:
+    if: ${{ inputs.farm == 'farm_02' }}
+
+    name: Provision farm_02
+
+    runs-on:
+      - self-hosted
+      - edge
+      - farm_02
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make deployment scripts executable
+        run: |
+          chmod +x edge/deployment/install_edge.sh
+          chmod +x edge/deployment/run_edge.sh
+
+      - name: Provision Edge
+        run: |
+          sudo edge/deployment/install_edge.sh \
+            --config edge/config/farm_02.yml
+
+      - name: Show installed Edge structure
+        run: |
+          echo
+          echo "Installed Edge structure:"
+          echo
+          sudo find /opt/poultry-edge \
+            -maxdepth 3 \
+            -print

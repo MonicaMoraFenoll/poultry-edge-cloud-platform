@@ -168,7 +168,17 @@ Los módulos principales son:
 CI/CD
 
 build-edge-image.yml (CI): construye y publica la imagen Docker.
-edge-provisioning.yml: prepara un Edge nuevo.
+edge-provisioning.yml: prepara un Edge nuevo. Preparar un dispositivo Edge nuevo para que después pueda recibir y ejecutar la aplicación.En concreto, deberá dejar algo así en el Edge:
+/opt/poultry-edge/
+├── config/
+│   └── edge.yaml
+├── data/
+│   ├── images/
+│   ├── models/
+│   └── outputs/
+└── scripts/
+    └── run_edge.sh
+
 edge-deploy.yml: despliega una versión concreta en una granja seleccionada.
 run_edge.sh + systemd.service + systemd.timer: ejecutan automáticamente la inferencia diaria.
 
