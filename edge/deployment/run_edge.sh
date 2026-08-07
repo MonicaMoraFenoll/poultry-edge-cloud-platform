@@ -11,7 +11,6 @@ IMAGES_DIR="${POULTRY_EDGE_IMAGES:-/opt/poultry-edge/data/images}"
 OUTPUTS_DIR="${POULTRY_EDGE_OUTPUTS:-/opt/poultry-edge/data/outputs}"
 MODELS_DIR="${POULTRY_EDGE_MODELS:-/opt/poultry-edge/data/models}"
 
-
 echo
 echo "========================================="
 echo " Poultry Edge Inference"
@@ -23,7 +22,6 @@ echo "Images        : $IMAGES_DIR"
 echo "Outputs       : $OUTPUTS_DIR"
 echo "Models        : $MODELS_DIR"
 echo
-
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "Configuration file not found: '$CONFIG_FILE'." >&2
@@ -43,12 +41,10 @@ for directory in "${required_directories[@]}"; do
     fi
 done
 
-
 if ! command -v docker >/dev/null 2>&1; then
     echo "Docker is not installed or is not available in PATH." >&2
     exit 1
 fi
-
 
 echo "Starting Docker container..."
 

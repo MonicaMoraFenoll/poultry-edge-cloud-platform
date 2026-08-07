@@ -1,0 +1,110 @@
+name: Deploy Edge
+
+on:
+  workflow_dispatch:
+    inputs:
+      farm:
+        description: Edge device to update
+        required: true
+        type: choice
+        default: farm_01
+        options:
+          - farm_01
+          - farm_02
+
+      image_tag:
+        description: Docker image version to deploy
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/poultry-edge
+
+
+jobs:
+
+  deploy-farm-01:
+    if: ${{ inputs.farm == 'farm_01' }}
+
+    name: Deploy to farm_01
+
+    runs-on:
+      - self-hosted
+      - edge
+      - farm_01
+
+    steps:
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: |
+          docker pull \
+            "${IMAGE_NAME}:${{ inputs.image_tag }}"
+
+      - name: Configure deployed image
+        run: |
+          sudo mkdir -p /opt/poultry-edge/env
+
+          echo "POULTRY_EDGE_IMAGE=${IMAGE_NAME}:${{ inputs.image_tag }}" \
+            | sudo tee /opt/poultry-edge/env/poultry-edge.env > /dev/null
+
+      - name: Show deployed version
+        run: |
+          echo "Farm: farm_01"
+          echo "Image: ${IMAGE_NAME}:${{ inputs.image_tag }}"
+
+          docker image inspect \
+            "${IMAGE_NAME}:${{ inputs.image_tag }}" \
+            --format='{{.Id}}'
+
+
+  deploy-farm-02:
+    if: ${{ inputs.farm == 'farm_02' }}
+
+    name: Deploy to farm_02
+
+    runs-on:
+      - self-hosted
+      - edge
+      - farm_02
+
+    steps:
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: |
+          docker pull \
+            "${IMAGE_NAME}:${{ inputs.image_tag }}"
+
+      - name: Configure deployed image
+        run: |
+          sudo mkdir -p /opt/poultry-edge/env
+
+          echo "POULTRY_EDGE_IMAGE=${IMAGE_NAME}:${{ inputs.image_tag }}" \
+            | sudo tee /opt/poultry-edge/env/poultry-edge.env > /dev/null
+
+      - name: Show deployed version
+        run: |
+          echo "Farm: farm_02"
+          echo "Image: ${IMAGE_NAME}:${{ inputs.image_tag }}"
+
+          docker image inspect \
+            "${IMAGE_NAME}:${{ inputs.image_tag }}" \
+            --format='{{.Id}}'

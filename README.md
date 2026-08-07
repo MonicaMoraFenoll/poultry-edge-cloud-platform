@@ -165,23 +165,6 @@ Los módulos principales son:
 
 ---
 
-CI/CD
-
-build-edge-image.yml (CI): construye y publica la imagen Docker.
-edge-provisioning.yml: prepara un Edge nuevo. Preparar un dispositivo Edge nuevo para que después pueda recibir y ejecutar la aplicación.En concreto, deberá dejar algo así en el Edge:
-/opt/poultry-edge/
-├── config/
-│   └── edge.yaml
-├── data/
-│   ├── images/
-│   ├── models/
-│   └── outputs/
-└── scripts/
-    └── run_edge.sh
-
-edge-deploy.yml: despliega una versión concreta en una granja seleccionada.
-run_edge.sh + systemd.service + systemd.timer: ejecutan automáticamente la inferencia diaria.
-
 ## Flujo de ejecución
 
 Cada ejecución del Edge sigue el siguiente flujo:
@@ -236,6 +219,134 @@ Cada fila del CSV representa una imagen procesada e incluye, entre otros, los si
 - estado de la inferencia.
 
 ---
+
+## Arquitectura CI/CD
+
+El sistema Edge utiliza una arquitectura de Integración y Despliegue Continuo (CI/CD) basada en GitHub Actions, Docker y runners autoalojados (self-hosted runners).
+
+La arquitectura se divide en cuatro fases independientes:
+
+Construcción de la imagen Docker (CI).
+Aprovisionamiento del dispositivo Edge.
+Despliegue de nuevas versiones.
+Ejecución diaria de la inferencia.
+
+Cada fase tiene una única responsabilidad, facilitando el mantenimiento, la actualización y la escalabilidad del sistema.
+
+1. Construcción de la imagen Docker
+
+Workflow:
+
+.github/workflows/build-edge-image.yml
+
+Responsabilidad:
+
+Construir la imagen Docker de la aplicación.
+Instalar todas las dependencias Python.
+Generar e instalar el paquete Python del proyecto.
+Publicar la imagen Docker en GitHub Container Registry (GHCR).
+
+La imagen Docker contiene:
+
+el código fuente completo de la aplicación;
+todas las dependencias necesarias;
+el pipeline de inferencia;
+el punto de entrada de la aplicación.
+
+Durante esta fase no interviene ningún dispositivo Edge, ya que toda la construcción se realiza utilizando los recursos del runner de GitHub Actions.
+
+2. Aprovisionamiento del Edge
+
+Workflow:
+
+.github/workflows/edge-provisioning.yml
+
+El aprovisionamiento únicamente se realiza cuando se incorpora un nuevo dispositivo Edge al sistema.
+
+Su responsabilidad consiste en preparar el dispositivo para que posteriormente pueda recibir y ejecutar la aplicación.
+
+Tras el aprovisionamiento, el Edge dispone de la siguiente estructura persistente:
+
+/opt/poultry-edge/
+├── config/
+│   └── edge.yaml
+├── data/
+│   ├── images/
+│   ├── models/
+│   └── outputs/
+└── scripts/
+    └── run_edge.sh
+
+Durante este proceso se realizan las siguientes acciones:
+
+instalación del fichero de configuración correspondiente a la granja;
+creación de los directorios persistentes;
+instalación del script de ejecución (run_edge.sh);
+instalación y habilitación del servicio y temporizador de systemd.
+
+El código fuente de la aplicación no se copia al Edge, ya que se distribuye exclusivamente mediante imágenes Docker.
+
+3. Despliegue de nuevas versiones
+
+Workflow:
+
+.github/workflows/edge-deploy.yml
+
+Responsabilidad:
+
+Desplegar una versión concreta de la imagen Docker en una granja seleccionada.
+
+El workflow se ejecuta sobre el runner correspondiente al Edge seleccionado y realiza las siguientes operaciones:
+
+autenticación en GitHub Container Registry;
+descarga de la imagen Docker correspondiente a la versión seleccionada;
+configuración del Edge para utilizar dicha versión en las siguientes ejecuciones.
+
+Este mecanismo permite realizar despliegues controlados, validando nuevas versiones sobre una única granja antes de extenderlas al resto del sistema.
+
+4. Ejecución diaria de la inferencia
+
+La ejecución de la inferencia es completamente independiente del proceso de despliegue.
+
+La planificación queda gestionada por Linux mediante:
+
+run_edge.sh
+poultry-edge.service
+poultry-edge.timer
+
+El flujo de ejecución es el siguiente:
+
+11:00
+    │
+    ▼
+poultry-edge.timer
+    │
+    ▼
+poultry-edge.service
+    │
+    ▼
+run_edge.sh
+    │
+    ▼
+docker run
+    │
+    ▼
+poultry_edge.main
+    │
+    ▼
+Pipeline de inferencia
+    │
+    ▼
+Resultados CSV
+
+El script run_edge.sh crea un contenedor Docker utilizando la imagen previamente desplegada y monta los directorios persistentes necesarios para la ejecución:
+
+configuración del Edge;
+imágenes de entrada;
+modelos almacenados localmente;
+directorio de resultados.
+
+Una vez finalizada la inferencia, el contenedor Docker se elimina automáticamente, mientras que la imagen Docker permanece almacenada en el dispositivo. De este modo, únicamente será necesario descargar una nueva imagen cuando se despliegue una nueva versión de la aplicación.
 
 # Próximos pasos
 

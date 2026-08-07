@@ -1,0 +1,17 @@
+imageio
+openpyxl
+pandas
+pydantic-settings
+easyocr
+opencv-python
+polars
+ultralytics-thop
+psutil
+scipy
+matplotlib
+pillow
+requests
+tqdm
+seaborn
+py-cpuinfo
+av

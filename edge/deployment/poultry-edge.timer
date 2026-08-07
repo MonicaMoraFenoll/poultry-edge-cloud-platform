@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Poultry Edge inference daily at 11:00
+
+[Timer]
+OnCalendar=*-*-* 11:00:00
+Persistent=true
+Unit=poultry-edge.service
+
+[Install]
+WantedBy=timers.target

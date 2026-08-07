@@ -1,0 +1,13 @@
+[Unit]
+Description=Poultry Edge Daily Inference
+Documentation=https://github.com/OWNER/poultry-edge-cloud-platform
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/poultry-edge/scripts/run_edge.sh
+EnvironmentFile=/opt/poultry-edge/env/poultry-edge.env
+
+[Install]
+WantedBy=multi-user.target
