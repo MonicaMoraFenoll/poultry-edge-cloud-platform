@@ -1,0 +1,19 @@
+farm:
+  id: farm_02
+
+images:
+  root_directory: /app/data/images
+
+outputs:
+  root_directory: /app/data/outputs
+
+model:
+  registered_name: egg_counter_farm_02
+  alias: production
+  local_root_directory: /app/models
+
+inference:
+  supported_extensions:
+    - .jpg
+    - .jpeg
+    - .png
