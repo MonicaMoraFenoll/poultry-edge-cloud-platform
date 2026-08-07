@@ -1,0 +1,43 @@
+name: Build Edge Docker Image
+
+on:
+  push:
+    paths:
+      - "edge/src/**"
+      - "edge/Dockerfile"
+      - "edge/requirements-pro.txt"
+      - "edge/pyproject.toml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+
+  build-image:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./edge
+          file: ./edge/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/poultry-edge:latest
+            ghcr.io/${{ github.repository_owner }}/poultry-edge:${{ github.sha }}
