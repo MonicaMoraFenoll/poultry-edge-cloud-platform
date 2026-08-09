@@ -47,7 +47,8 @@ jobs:
 
       - name: Create simulated Edge
         run: |
-          mkdir -p "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env"
+          mkdir -p \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env"
 
       - name: Configure deployed image
         run: |
@@ -63,7 +64,8 @@ jobs:
           echo "Simulated Edge:"
           echo
 
-          cat "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env/poultry-edge.env"
+          cat \
+            "${{ runner.temp }}/poultry-edge/${{ inputs.farm }}/env/poultry-edge.env"
 
       - name: Verify Docker image
         run: |
