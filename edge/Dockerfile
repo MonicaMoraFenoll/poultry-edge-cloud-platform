@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements-pro.txt .
+COPY requirements.txt .
 COPY pyproject.toml .
 COPY src ./src
 
