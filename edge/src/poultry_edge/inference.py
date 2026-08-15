@@ -10,7 +10,6 @@ from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
 from .config import EdgeConfig
-from .image_discovery import find_daily_images
 from .model_loader import LocalModel
 
 
@@ -277,26 +276,11 @@ def run_daily_inference(
     model: YOLO,
     local_model: LocalModel,
     processing_date: date,
+    image_paths: list[Path],
 ) -> list[InferenceResult]:
     """Run YOLO inference on all images belonging to one date."""
 
     validate_yolo_model(model)
-
-    image_paths = find_daily_images(
-        images_root=config.images.root_directory,
-        processing_date=processing_date,
-        supported_extensions=(
-            config.inference.supported_extensions
-        ),
-    )
-
-    if not image_paths:
-        logger.warning(
-            "No images found for farm='%s', date='%s'.",
-            config.farm.id,
-            processing_date.isoformat(),
-        )
-        return []
 
     logger.info(
         "Starting inference for %d image(s). "

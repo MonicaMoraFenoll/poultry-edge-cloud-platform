@@ -5,6 +5,7 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from .image_discovery import find_daily_images
 from .config import EdgeConfig
 from .inference import run_daily_inference
 from .model_loader import (
@@ -29,11 +30,13 @@ def run_daily_pipeline(
 
     Workflow:
 
-    1. Synchronize the model assigned to the edge.
-    2. Load the synchronized YOLO model.
-    3. Discover and process the images for the selected date.
-    4. Write the daily inference CSV.
-    5. Log execution statistics.
+    1. Discover the images for the selected date.
+    2. Stop if no images are available.
+    3. Synchronize the model assigned to the edge.
+    4. Load the synchronized YOLO model.
+    5. Run inference over the discovered images.
+    6. Write the daily inference CSV.
+    7. Log execution statistics.
 
     Parameters
     ----------
@@ -70,6 +73,29 @@ def run_daily_pipeline(
         processing_date.isoformat(),
     )
 
+    image_paths = find_daily_images(
+        images_root=config.images.root_directory,
+        processing_date=processing_date,
+        supported_extensions=config.inference.supported_extensions,
+    )
+
+    if not image_paths:
+        pipeline_duration_seconds = (
+            time.perf_counter() - pipeline_start_time
+        )
+
+        logger.info(
+            "No images found for the selected date. "
+            "Skipping model synchronization and inference. "
+            "Farm='%s', date='%s', started_at='%s', "
+            "duration_seconds=%.3f.",
+            config.farm.id,
+            processing_date.isoformat(),
+            pipeline_started_at.isoformat(),
+            pipeline_duration_seconds,
+        )
+
+        return None
     # Resolve the model version assigned to this edge and make sure that
     # it is available locally. If MLflow is unavailable, the last valid
     # local model may be used.
@@ -100,6 +126,7 @@ def run_daily_pipeline(
         model=model,
         local_model=local_model,
         processing_date=processing_date,
+        image_paths=image_paths,
     )
 
     # Write one CSV inside outputs/YYYY/MM/DD/.

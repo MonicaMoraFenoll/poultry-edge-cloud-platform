@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 CURRENT_MODEL_FILE_NAME = "current.json"
-MLFLOW_MODEL_FILE_NAME = "MLmodel"
 YOLO_WEIGHTS_FILE_NAME = "best.pt"
 
 
@@ -127,21 +126,10 @@ def _get_yolo_weights_path(
 def _validate_model_directory(
     model_directory: Path,
 ) -> bool:
-    """
-    Check whether a directory contains a valid edge YOLO model.
-
-    A valid model directory must contain:
-
-    - MLmodel
-    - best.pt
-    """
+    """Check whether a directory contains valid YOLO weights."""
 
     return (
         model_directory.is_dir()
-        and (
-            model_directory
-            / MLFLOW_MODEL_FILE_NAME
-        ).is_file()
         and _get_yolo_weights_path(
             model_directory
         ).is_file()
@@ -375,7 +363,7 @@ def _download_model_version(
 
     The model is downloaded into a temporary directory first. It is
     moved to its final location only after checking that it contains
-    both MLmodel and best.pt.
+    best.pt.
     """
 
     versions_directory = (
@@ -414,7 +402,6 @@ def _download_model_version(
             raise RuntimeError(
                 "The downloaded model is not valid for edge "
                 "inference. The model directory must contain "
-                f"'{MLFLOW_MODEL_FILE_NAME}' and "
                 f"'{YOLO_WEIGHTS_FILE_NAME}' directly in its root. "
                 f"Downloaded directory: '{downloaded_path}'."
             )

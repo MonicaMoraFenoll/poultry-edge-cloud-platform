@@ -18,3 +18,5 @@ config/
 .gitignore
 
 *.log
+
+*.mlartifacts/

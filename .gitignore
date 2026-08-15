@@ -4,6 +4,9 @@
 # Data
 data/
 
+# Models
+models_mock/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -23,3 +26,5 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+mlartifacts/

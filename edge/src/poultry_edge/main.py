@@ -4,9 +4,11 @@ import logging
 import sys
 from datetime import date
 from pathlib import Path
+import os
 
 from .config import load_edge_config
 from .pipeline import run_daily_pipeline
+
 
 # test
 
@@ -42,7 +44,8 @@ def main() -> int:
 
     1. Configure logging.
     2. Load the edge configuration.
-    3. Run the daily inference pipeline.
+    3. Read MLflow connection settings.
+    4. Run the daily inference pipeline.
     """
 
     configure_logging()
@@ -57,11 +60,29 @@ def main() -> int:
             config.farm.id,
         )
 
+        tracking_uri = os.getenv(
+            "MLFLOW_TRACKING_URI"
+        )
+
+        registry_uri = os.getenv(
+            "MLFLOW_REGISTRY_URI",
+            tracking_uri,
+        )
+
+        logger.info(
+            "MLflow configuration. "
+            "Tracking URI='%s', Registry URI='%s'.",
+            tracking_uri,
+            registry_uri,
+        )
+
         processing_date = date.today()
 
         run_daily_pipeline(
             config=config,
             processing_date=processing_date,
+            tracking_uri=tracking_uri,
+            registry_uri=registry_uri,
         )
 
     except Exception:
@@ -75,7 +96,3 @@ def main() -> int:
     )
 
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
