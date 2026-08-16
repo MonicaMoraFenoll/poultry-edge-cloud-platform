@@ -348,6 +348,12 @@ directorio de resultados.
 
 Una vez finalizada la inferencia, el contenedor Docker se elimina automáticamente, mientras que la imagen Docker permanece almacenada en el dispositivo. De este modo, únicamente será necesario descargar una nueva imagen cuando se despliegue una nueva versión de la aplicación.
 
+
+Para levantar el mlflow local: mlflow server --host 127.0.0.1 --port 5000
+$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
+
+se han hecho los tests: pytest --cov=poultry_edge --cov-report=term-missing
+
 # Próximos pasos
 
 Las siguientes fases del proyecto consistirán en:
