@@ -352,7 +352,11 @@ Una vez finalizada la inferencia, el contenedor Docker se elimina automáticamen
 Para levantar el mlflow local: mlflow server --host 127.0.0.1 --port 5000
 $env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
 
-se han hecho los tests: pytest --cov=poultry_edge --cov-report=term-missing
+se han hecho los tests: pytest --cov=poultry_edge --cov-report=term-missing -> github actions de forma automatica si han cambio en el codigo
+
+
+El script generate_mock_egg_results.py genera resultados de inferencia simulados durante cinco días para las tres granjas, respetando la estructura de naves y jaulas definida en los datos maestros.
+Además, introduce una anomalía controlada en una zona concreta de una batería, asignando egg_count = 0, para permitir posteriormente la validación del análisis y contextualización espacial de los fenotipos.
 
 # Próximos pasos
 
