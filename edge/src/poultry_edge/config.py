@@ -27,6 +27,11 @@ class OutputsConfig:
 
     root_directory: Path
 
+@dataclass(frozen=True)
+class UploadConfig:
+    """Configuration for the local cloud-upload state."""
+
+    state_database: Path
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -51,6 +56,7 @@ class EdgeConfig:
     farm: FarmConfig
     images: ImagesConfig
     outputs: OutputsConfig
+    upload: UploadConfig
     model: ModelConfig
     inference: InferenceConfig
 
@@ -181,6 +187,7 @@ def load_edge_config(config_path: Path) -> EdgeConfig:
     outputs = _require_mapping(raw_config, "outputs")
     model = _require_mapping(raw_config, "model")
     inference = _require_mapping(raw_config, "inference")
+    upload = _require_mapping(raw_config, "upload")
 
     farm_id = _require_string(
         data=farm,
@@ -198,6 +205,12 @@ def load_edge_config(config_path: Path) -> EdgeConfig:
         data=outputs,
         key="root_directory",
         field_path="outputs.root_directory",
+    )
+
+    upload_state_database = _require_path(
+    data=upload,
+    key="state_database",
+    field_path="upload.state_database",
     )
 
     registered_model_name = _require_string(
@@ -235,6 +248,9 @@ def load_edge_config(config_path: Path) -> EdgeConfig:
         ),
         outputs=OutputsConfig(
             root_directory=outputs_root_directory,
+        ),
+        upload=UploadConfig(
+        state_database=upload_state_database,
         ),
         model=ModelConfig(
             registered_name=registered_model_name,

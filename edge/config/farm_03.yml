@@ -7,6 +7,9 @@ images:
 outputs:
   root_directory: /app/data/outputs
 
+upload:
+  state_database: /app/data/state/upload_state.db
+
 model:
   registered_name: egg_counter_farm_03
   alias: production
