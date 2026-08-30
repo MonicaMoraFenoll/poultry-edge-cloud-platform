@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Poultry Edge Cloud Upload Daily
+
+[Timer]
+OnCalendar=*-*-* 12:00:00
+Persistent=true
+Unit=poultry-edge-upload.service
+
+[Install]
+WantedBy=timers.target

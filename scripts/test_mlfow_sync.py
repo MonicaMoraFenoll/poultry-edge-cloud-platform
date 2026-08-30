@@ -5,8 +5,8 @@ from poultry_edge.model_loader import synchronize_model
 
 
 model_config = ModelConfig(
-    registered_name="egg_counter_farm_01",
-    alias="production",
+    registered_name="egg_detector",
+    alias="farm_01_production",
     local_root_directory=Path("../models_mock"),
 )
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=Poultry Edge Cloud Upload
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/poultry-edge/scripts/run_upload.sh
+EnvironmentFile=/opt/poultry-edge/env/poultry-edge.env
+
+[Install]
+WantedBy=multi-user.target

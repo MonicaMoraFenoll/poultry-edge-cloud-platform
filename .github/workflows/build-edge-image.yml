@@ -5,7 +5,7 @@ on:
     paths:
       - "edge/src/**"
       - "edge/Dockerfile"
-      - "edge/requirements-pro.txt"
+      - "edge/requirements.txt"
       - "edge/pyproject.toml"
       - ".github/workflows/build-edge-image.yml"
 

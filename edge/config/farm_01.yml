@@ -11,8 +11,8 @@ upload:
   state_database: /app/data/state/upload_state.db
 
 model:
-  registered_name: egg_counter_farm_01
-  alias: production
+  registered_name: egg_detector
+  alias: farm_01_production
   local_root_directory: /app/models
 
 inference:

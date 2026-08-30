@@ -31,7 +31,7 @@ class LocalModel:
     model_path points to the complete directory of the synchronized
     model version, for example:
 
-        /data/models/egg_counter/versions/4
+       /app/models/egg_detector/versions/4
     """
 
     registered_name: str

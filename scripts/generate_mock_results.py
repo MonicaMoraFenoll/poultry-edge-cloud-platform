@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import random
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -11,7 +12,7 @@ import pandas as pd
 # CONFIGURATION
 # ============================================================
 
-OUTPUT_ROOT = Path("data\outputs")
+OUTPUT_ROOT = Path("data") / "outputs"
 
 START_DATE = date(2026, 8, 1)
 NUMBER_OF_DAYS = 5
@@ -31,22 +32,36 @@ MODEL_SYNCHRONIZED_AT = "2026-08-01T08:00:00+00:00"
 
 
 # ============================================================
-# ANOMALY CONFIGURATION
+# SIMULATION CONFIGURATION
 # ============================================================
-# Simulated anomaly:
-#
-# farm_02
-# house 2
-# battery 4
-# final 10% of the battery
-#
-# All cages in this zone will return egg_count = 0
-# during all five days.
 
+# Persistent spatial anomaly:
+# farm_02 / house 2 / battery 4 / final 10%.
 ANOMALY_FARM = "farm_02"
 ANOMALY_HOUSE = 2
 ANOMALY_BATTERY = 4
 ANOMALY_END_FRACTION = 0.10
+
+
+# Temporary production decrease:
+# farm_03 shows lower egg production on day 4.
+TEMPORAL_ANOMALY_FARM = "farm_03"
+TEMPORAL_ANOMALY_DATE = date(2026, 8, 4)
+TEMPORAL_PRODUCTION_FACTOR = 0.65
+
+
+# Small proportion of technical inference errors.
+TECHNICAL_ERROR_RATE = 0.003
+
+
+# Normal daily production variation.
+DAILY_PRODUCTION_FACTORS = {
+    date(2026, 8, 1): 1.00,
+    date(2026, 8, 2): 0.98,
+    date(2026, 8, 3): 1.02,
+    date(2026, 8, 4): 1.00,
+    date(2026, 8, 5): 1.01,
+}
 
 
 # ============================================================
@@ -77,45 +92,21 @@ CSV_FIELD_NAMES = [
 
 # ============================================================
 # MASTER DATA STRUCTURE
-#
-# This structure must match the sample master data stored
-# in the relational database.
 # ============================================================
 
 FARMS = {
     "farm_01": {
         "houses": {
             1: {
-                1: {
-                    "levels": 2,
-                    "cages_per_side": 250,
-                },
-                2: {
-                    "levels": 3,
-                    "cages_per_side": 300,
-                },
-                3: {
-                    "levels": 4,
-                    "cages_per_side": 400,
-                },
-                4: {
-                    "levels": 3,
-                    "cages_per_side": 500,
-                },
+                1: {"levels": 2, "cages_per_side": 250},
+                2: {"levels": 3, "cages_per_side": 300},
+                3: {"levels": 4, "cages_per_side": 400},
+                4: {"levels": 3, "cages_per_side": 500},
             },
             2: {
-                1: {
-                    "levels": 2,
-                    "cages_per_side": 300,
-                },
-                2: {
-                    "levels": 3,
-                    "cages_per_side": 400,
-                },
-                3: {
-                    "levels": 4,
-                    "cages_per_side": 500,
-                },
+                1: {"levels": 2, "cages_per_side": 300},
+                2: {"levels": 3, "cages_per_side": 400},
+                3: {"levels": 4, "cages_per_side": 500},
             },
         },
     },
@@ -123,36 +114,15 @@ FARMS = {
     "farm_02": {
         "houses": {
             1: {
-                1: {
-                    "levels": 3,
-                    "cages_per_side": 250,
-                },
-                2: {
-                    "levels": 4,
-                    "cages_per_side": 350,
-                },
-                3: {
-                    "levels": 2,
-                    "cages_per_side": 500,
-                },
+                1: {"levels": 3, "cages_per_side": 250},
+                2: {"levels": 4, "cages_per_side": 350},
+                3: {"levels": 2, "cages_per_side": 500},
             },
             2: {
-                1: {
-                    "levels": 2,
-                    "cages_per_side": 250,
-                },
-                2: {
-                    "levels": 3,
-                    "cages_per_side": 350,
-                },
-                3: {
-                    "levels": 4,
-                    "cages_per_side": 450,
-                },
-                4: {
-                    "levels": 2,
-                    "cages_per_side": 500,
-                },
+                1: {"levels": 2, "cages_per_side": 250},
+                2: {"levels": 3, "cages_per_side": 350},
+                3: {"levels": 4, "cages_per_side": 450},
+                4: {"levels": 2, "cages_per_side": 500},
             },
         },
     },
@@ -160,36 +130,15 @@ FARMS = {
     "farm_03": {
         "houses": {
             1: {
-                1: {
-                    "levels": 4,
-                    "cages_per_side": 250,
-                },
-                2: {
-                    "levels": 3,
-                    "cages_per_side": 300,
-                },
-                3: {
-                    "levels": 2,
-                    "cages_per_side": 400,
-                },
-                4: {
-                    "levels": 4,
-                    "cages_per_side": 500,
-                },
+                1: {"levels": 4, "cages_per_side": 250},
+                2: {"levels": 3, "cages_per_side": 300},
+                3: {"levels": 2, "cages_per_side": 400},
+                4: {"levels": 4, "cages_per_side": 500},
             },
             2: {
-                1: {
-                    "levels": 2,
-                    "cages_per_side": 300,
-                },
-                2: {
-                    "levels": 3,
-                    "cages_per_side": 400,
-                },
-                3: {
-                    "levels": 4,
-                    "cages_per_side": 500,
-                },
+                1: {"levels": 2, "cages_per_side": 300},
+                2: {"levels": 3, "cages_per_side": 400},
+                3: {"levels": 4, "cages_per_side": 500},
             },
         },
     },
@@ -202,14 +151,11 @@ FARMS = {
 
 def generate_all_cages() -> list[dict]:
     """
-    Generate the physical cage structure.
+    Generate exactly the same physical structure used by
+    the relational master data.
 
-    cage_id starts at 1000 for every house and continues
-    sequentially across all batteries of that house.
-
-    Therefore:
-        - cage_id is unique inside one house;
-        - cage_id may be repeated in another house.
+    cage_id starts at 1000 in each house and continues across
+    all batteries of that house.
     """
 
     cages: list[dict] = []
@@ -232,10 +178,7 @@ def generate_all_cages() -> list[dict]:
                     number_of_levels + 1,
                 ):
 
-                    for side in (
-                        "FRONT",
-                        "BACK",
-                    ):
+                    for side in ("FRONT", "BACK"):
 
                         for position in range(
                             1,
@@ -268,7 +211,7 @@ def validate_cages(
     cages: list[dict],
 ) -> None:
     """
-    Validate that cage_id is unique inside each house.
+    Validate that cage_id is unique inside every house.
     """
 
     seen: set[tuple[str, int, int]] = set()
@@ -291,22 +234,65 @@ def validate_cages(
 
 
 # ============================================================
-# ANOMALY
+# DETERMINISTIC CAGE CHARACTERISTICS
 # ============================================================
 
-def is_anomalous_cage(
+def stable_random_value(
+    *values: object,
+) -> float:
+    """
+    Generate a deterministic value between 0 and 1 from a key.
+
+    This makes the same cage behave similarly across different days.
+    """
+
+    key = "|".join(
+        str(value)
+        for value in values
+    )
+
+    digest = hashlib.sha256(
+        key.encode("utf-8")
+    ).hexdigest()
+
+    integer_value = int(
+        digest[:12],
+        16,
+    )
+
+    return (
+        integer_value
+        / int("f" * 12, 16)
+    )
+
+
+def get_cage_productivity(
+    cage: dict,
+) -> float:
+    """
+    Give each cage a persistent productivity factor.
+
+    Values are approximately between 0.90 and 1.10.
+    """
+
+    value = stable_random_value(
+        cage["farm_id"],
+        cage["house_id"],
+        cage["cage_id"],
+    )
+
+    return 0.90 + (0.20 * value)
+
+
+# ============================================================
+# ANOMALIES
+# ============================================================
+
+def is_spatial_anomaly(
     cage: dict,
 ) -> bool:
     """
-    Check whether a cage belongs to the simulated anomalous zone.
-
-    The anomalous zone corresponds to the last 10% of positions in:
-
-        farm_02
-        house 2
-        battery 4
-
-    The anomaly affects every level and both battery sides.
+    Persistent anomaly at the final 10% of one battery.
     """
 
     if cage["farm_id"] != ANOMALY_FARM:
@@ -332,22 +318,133 @@ def is_anomalous_cage(
     )
 
 
+def get_temporal_factor(
+    farm_id: str,
+    processing_date: date,
+) -> float:
+    """
+    Return the production factor associated with farm and date.
+    """
+
+    factor = DAILY_PRODUCTION_FACTORS.get(
+        processing_date,
+        1.0,
+    )
+
+    if (
+        farm_id == TEMPORAL_ANOMALY_FARM
+        and processing_date == TEMPORAL_ANOMALY_DATE
+    ):
+        factor *= TEMPORAL_PRODUCTION_FACTOR
+
+    return factor
+
+
 # ============================================================
-# MOCK INFERENCE VALUES
+# TECHNICAL ERRORS
+# ============================================================
+
+def generate_technical_error() -> str | None:
+    """
+    Generate occasional technical inference errors.
+    """
+
+    if random.random() >= TECHNICAL_ERROR_RATE:
+        return None
+
+    return random.choice(
+        [
+            "RuntimeError: YOLO inference failed",
+            "OSError: Could not read image",
+            "ValueError: Invalid image input",
+        ]
+    )
+
+
+# ============================================================
+# MOCK PHENOTYPE
 # ============================================================
 
 def generate_egg_count(
-    anomalous: bool,
+    cage: dict,
+    processing_date: date,
 ) -> int:
     """
     Generate the simulated egg count.
 
-    Normal cages mostly contain one egg.
-    The anomalous zone always returns zero.
+    The result includes:
+        - persistent cage variability;
+        - normal day-to-day variation;
+        - one temporary farm-level decrease;
+        - one persistent spatial anomaly.
     """
 
-    if anomalous:
+    if is_spatial_anomaly(cage):
         return 0
+
+    cage_productivity = get_cage_productivity(
+        cage
+    )
+
+    temporal_factor = get_temporal_factor(
+        farm_id=cage["farm_id"],
+        processing_date=processing_date,
+    )
+
+    productivity = (
+        cage_productivity
+        * temporal_factor
+    )
+
+    # Base probabilities roughly centred around one egg/cage.
+    probability_zero = 0.07
+    probability_two = 0.07
+
+    # Lower productivity increases the probability of zero eggs.
+    if productivity < 1.0:
+        difference = 1.0 - productivity
+
+        probability_zero += (
+            difference * 1.2
+        )
+
+        probability_two -= (
+            difference * 0.4
+        )
+
+    # Higher productivity increases the probability of two eggs.
+    elif productivity > 1.0:
+        difference = productivity - 1.0
+
+        probability_two += (
+            difference * 0.8
+        )
+
+        probability_zero -= (
+            difference * 0.3
+        )
+
+    probability_zero = max(
+        0.01,
+        min(
+            probability_zero,
+            0.60,
+        ),
+    )
+
+    probability_two = max(
+        0.01,
+        min(
+            probability_two,
+            0.25,
+        ),
+    )
+
+    probability_one = (
+        1.0
+        - probability_zero
+        - probability_two
+    )
 
     return random.choices(
         population=[
@@ -356,9 +453,9 @@ def generate_egg_count(
             2,
         ],
         weights=[
-            0.05,
-            0.90,
-            0.05,
+            probability_zero,
+            probability_one,
+            probability_two,
         ],
         k=1,
     )[0]
@@ -368,9 +465,7 @@ def generate_confidence(
     egg_count: int,
 ) -> float | None:
     """
-    Generate a mock mean detection confidence.
-
-    Confidence is None when no egg is detected.
+    Generate mean YOLO confidence.
     """
 
     if egg_count == 0:
@@ -394,16 +489,14 @@ def build_output_file(
     processing_date: date,
 ) -> Path:
     """
-    Build the daily output path.
-
     Example:
 
-        /data/outputs/
-        └── farm_01/
-            └── 2026/
-                └── 08/
-                    └── 16/
-                        └── egg_prediction.csv
+    data/outputs/
+        farm_01/
+            2026/
+                08/
+                    01/
+                        egg_prediction.csv
     """
 
     return (
@@ -425,9 +518,6 @@ def generate_daily_results(
     farm_id: str,
     processing_date: date,
 ) -> pd.DataFrame:
-    """
-    Generate one mock inference result per cage for one farm and day.
-    """
 
     rows: list[dict] = []
 
@@ -441,17 +531,30 @@ def generate_daily_results(
         farm_cages
     ):
 
-        anomalous = is_anomalous_cage(
-            cage
+        technical_error = (
+            generate_technical_error()
         )
 
-        egg_count = generate_egg_count(
-            anomalous=anomalous
-        )
+        if technical_error is not None:
 
-        confidence = generate_confidence(
-            egg_count=egg_count
-        )
+            egg_count = None
+            confidence = None
+            inference_status = "ERROR"
+            error_message = technical_error
+
+        else:
+
+            egg_count = generate_egg_count(
+                cage=cage,
+                processing_date=processing_date,
+            )
+
+            confidence = generate_confidence(
+                egg_count=egg_count
+            )
+
+            inference_status = "SUCCESS"
+            error_message = None
 
         image_name = (
             f"cage_{cage['cage_id']}.jpg"
@@ -480,274 +583,4 @@ def generate_daily_results(
             milliseconds=index * 50
         )
 
-        rows.append(
-            {
-                "farm_id": farm_id,
-                "house_id": str(
-                    cage["house_id"]
-                ),
-                "cage_id": str(
-                    cage["cage_id"]
-                ),
-                "capture_date": (
-                    processing_date.isoformat()
-                ),
-                "processing_date": (
-                    processing_date.isoformat()
-                ),
-                "image_name": image_name,
-                "image_path": image_path,
-                "image_size_bytes": random.randint(
-                    100_000,
-                    500_000,
-                ),
-                "egg_count": egg_count,
-                "confidence": confidence,
-                "registered_model_name": (
-                    REGISTERED_MODEL_NAME
-                ),
-                "model_version": (
-                    MODEL_VERSION
-                ),
-                "model_alias": (
-                    MODEL_ALIAS
-                ),
-                "model_synchronized_at": (
-                    MODEL_SYNCHRONIZED_AT
-                ),
-                "inference_started_at": (
-                    inference_started_at.isoformat()
-                ),
-                "inference_duration_ms": round(
-                    random.uniform(
-                        15.0,
-                        80.0,
-                    ),
-                    3,
-                ),
-                "inference_status": "SUCCESS",
-                "error_message": None,
-            }
-        )
-
-    return pd.DataFrame(
-        rows,
-        columns=CSV_FIELD_NAMES,
-    )
-
-
-# ============================================================
-# VALIDATE GENERATED RESULTS
-# ============================================================
-
-def validate_daily_results(
-    results: pd.DataFrame,
-    expected_cages: int,
-    farm_id: str,
-    processing_date: date,
-) -> None:
-    """
-    Validate the generated mock inference file.
-    """
-
-    if list(results.columns) != CSV_FIELD_NAMES:
-        raise RuntimeError(
-            "The generated CSV schema does not match "
-            "CSV_FIELD_NAMES."
-        )
-
-    if len(results) != expected_cages:
-        raise RuntimeError(
-            f"Unexpected number of rows for {farm_id}. "
-            f"Expected {expected_cages}, "
-            f"generated {len(results)}."
-        )
-
-    if not (
-        results["farm_id"] == farm_id
-    ).all():
-        raise RuntimeError(
-            "Results contain rows from another farm."
-        )
-
-    expected_date = (
-        processing_date.isoformat()
-    )
-
-    if not (
-        results["processing_date"]
-        == expected_date
-    ).all():
-        raise RuntimeError(
-            "Invalid processing_date detected."
-        )
-
-
-# ============================================================
-# SUMMARY
-# ============================================================
-
-def print_master_data_summary(
-    cages: list[dict],
-) -> None:
-
-    print()
-    print("MASTER DATA SUMMARY")
-    print("=" * 60)
-
-    for farm_id in FARMS:
-
-        farm_cages = [
-            cage
-            for cage in cages
-            if cage["farm_id"] == farm_id
-        ]
-
-        print(
-            f"{farm_id}: "
-            f"{len(farm_cages):,} cages"
-        )
-
-        house_ids = sorted(
-            {
-                cage["house_id"]
-                for cage in farm_cages
-            }
-        )
-
-        for house_id in house_ids:
-
-            house_cages = [
-                cage
-                for cage in farm_cages
-                if cage["house_id"]
-                == house_id
-            ]
-
-            print(
-                f"  house {house_id}: "
-                f"{len(house_cages):,} cages"
-            )
-
-
-# ============================================================
-# MAIN
-# ============================================================
-
-def main() -> None:
-
-    random.seed(
-        RANDOM_SEED
-    )
-
-    cages = generate_all_cages()
-
-    validate_cages(
-        cages
-    )
-
-    print_master_data_summary(
-        cages
-    )
-
-    print()
-    print("GENERATING MOCK INFERENCE RESULTS")
-    print("=" * 60)
-
-    for day_offset in range(
-        NUMBER_OF_DAYS
-    ):
-
-        processing_date = (
-            START_DATE
-            + timedelta(
-                days=day_offset
-            )
-        )
-
-        for farm_id in FARMS:
-
-            farm_cages = [
-                cage
-                for cage in cages
-                if cage["farm_id"]
-                == farm_id
-            ]
-
-            daily_results = (
-                generate_daily_results(
-                    cages=cages,
-                    farm_id=farm_id,
-                    processing_date=processing_date,
-                )
-            )
-
-            validate_daily_results(
-                results=daily_results,
-                expected_cages=len(
-                    farm_cages
-                ),
-                farm_id=farm_id,
-                processing_date=processing_date,
-            )
-
-            output_file = (
-                build_output_file(
-                    farm_id=farm_id,
-                    processing_date=processing_date,
-                )
-            )
-
-            output_file.parent.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-
-            daily_results.to_csv(
-                output_file,
-                index=False,
-            )
-
-            print(
-                f"{farm_id} | "
-                f"{processing_date} | "
-                f"{len(daily_results):,} rows | "
-                f"{output_file}"
-            )
-
-    # Validate anomaly definition.
-    anomalous_cages = [
-        cage
-        for cage in cages
-        if is_anomalous_cage(cage)
-    ]
-
-    print()
-    print("SIMULATED ANOMALY")
-    print("=" * 60)
-
-    print(
-        f"Farm: {ANOMALY_FARM}"
-    )
-
-    print(
-        f"House: {ANOMALY_HOUSE}"
-    )
-
-    print(
-        f"Battery: {ANOMALY_BATTERY}"
-    )
-
-    print(
-        "Zone: final 10% "
-        "of the battery"
-    )
-
-    print(
-        f"Affected cages per day: "
-        f"{len(anomalous_cages):,}"
-    )
-
-
-if __name__ == "__main__":
-    main()
+        # Failed images take slightly longer on

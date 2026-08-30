@@ -348,6 +348,164 @@ directorio de resultados.
 
 Una vez finalizada la inferencia, el contenedor Docker se elimina automáticamente, mientras que la imagen Docker permanece almacenada en el dispositivo. De este modo, únicamente será necesario descargar una nueva imagen cuando se despliegue una nueva versión de la aplicación.
 
+## Ingesta de resultados hacia Azure
+
+## Ingesta de resultados hacia Azure
+
+La ingesta de los resultados generados en el Edge se implementa como un proceso independiente de la inferencia. Su objetivo es detectar nuevos ficheros de resultados, registrar su estado localmente, transferirlos a Azure Data Lake Storage Gen2 y reintentar automáticamente aquellos envíos que hayan fallado.
+
+El flujo general es:
+
+```text
+Resultados locales
+      ↓
+Descubrimiento de ficheros
+      ↓
+Registro en SQLite
+      ↓
+PENDING / FAILED
+      ↓
+Transferencia a ADLS
+      ↓
+Verificación del fichero
+      ↓
+UPLOADED / FAILED
+
+upload_state.py
+
+Gestiona la base de datos SQLite utilizada para mantener el estado persistente de las transferencias.
+
+Responsabilidades principales:
+
+crear la base de datos de estado;
+registrar nuevos ficheros como PENDING;
+marcar una transferencia como FAILED cuando se produce un error;
+marcar una transferencia como UPLOADED cuando finaliza correctamente;
+almacenar el número de intentos, el último error y las fechas de transferencia;
+recuperar los ficheros PENDING y FAILED para reintentarlos.
+
+La base de datos se almacena en un directorio persistente del dispositivo Edge, de forma que el estado de las transferencias se conserva aunque el contenedor Docker sea sustituido o actualizado.
+
+upload_discovery.py
+
+Busca automáticamente los nuevos ficheros egg_prediction.csv generados por el Edge.
+
+La estructura local esperada es:
+
+/app/data/outputs/YYYY/MM/DD/egg_prediction.csv
+
+A partir del farm_id definido en el archivo de configuración del dispositivo, construye la ruta de destino en Azure:
+
+farm_id/YYYY/MM/DD/egg_prediction.csv
+
+Los nuevos ficheros encontrados se registran en la base de datos SQLite como pendientes de transferencia.
+
+cloud_uploader.py
+
+Implementa la comunicación con Azure Data Lake Storage Gen2.
+
+Sus principales responsabilidades son:
+
+crear el cliente de conexión con ADLS;
+transferir un fichero local a la ruta remota correspondiente;
+verificar la transferencia comparando el tamaño del fichero local y remoto;
+generar un error cuando la transferencia no puede considerarse válida.
+
+El fichero se considera correctamente transferido únicamente después de superar esta verificación.
+
+upload_manager.py
+
+Coordina el procesamiento de los ficheros pendientes.
+
+Obtiene de SQLite todos los registros con estado PENDING o FAILED e intenta transferirlos individualmente mediante cloud_uploader.py.
+
+Si una transferencia finaliza correctamente:
+
+PENDING / FAILED → UPLOADED
+
+Si se produce un error:
+
+PENDING / FAILED → FAILED
+
+El fallo de un fichero no detiene el procesamiento de los restantes, permitiendo continuar con el resto del lote.
+
+upload_results.py
+
+Actúa como punto de entrada del proceso de ingesta.
+
+Sus responsabilidades son:
+
+cargar la configuración del dispositivo Edge;
+obtener el farm_id, el directorio local de resultados y la ubicación de la base SQLite;
+inicializar la base de datos de estado;
+descubrir nuevos resultados;
+crear el cliente de Azure Data Lake Storage;
+procesar los ficheros pendientes y fallidos;
+registrar un resumen de la ejecución.
+
+En producción, este módulo se ejecuta mediante el comando:
+
+poultry-edge-upload
+
+definido como entry point del paquete Python.
+
+run_upload.sh
+
+Script de despliegue encargado de ejecutar el proceso de ingesta dentro de la imagen Docker del componente Edge.
+
+Monta únicamente los recursos necesarios:
+
+configuración → lectura
+outputs       → lectura
+state         → lectura/escritura
+
+y ejecuta:
+
+poultry-edge-upload
+
+La inferencia y la ingesta utilizan la misma imagen Docker, pero se ejecutan como procesos independientes.
+
+poultry-edge-upload.service
+
+Servicio systemd encargado de ejecutar run_upload.sh.
+
+Permite desacoplar la ingesta del proceso de inferencia y consultar su estado y logs de forma independiente.
+
+poultry-edge-upload.timer
+
+Temporizador systemd encargado de ejecutar periódicamente el servicio de ingesta.
+
+Gracias al estado persistente almacenado en SQLite, cada ejecución puede recuperar transferencias anteriores que no se completaron correctamente, permitiendo tolerar interrupciones temporales de conectividad.
+
+El flujo de ejecución completo es:
+
+poultry-edge-upload.timer
+        ↓
+poultry-edge-upload.service
+        ↓
+run_upload.sh
+        ↓
+Docker
+        ↓
+poultry-edge-upload
+        ↓
+upload_results.py
+        ↓
+upload_discovery.py
+        ↓
+upload_state.py
+        ↓
+upload_manager.py
+        ↓
+cloud_uploader.py
+        ↓
+Azure Data Lake Storage Gen2
+
+
+
+
+#####################
+
 
 Para levantar el mlflow local: mlflow server --host 127.0.0.1 --port 5000
 $env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
@@ -355,8 +513,24 @@ $env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
 se han hecho los tests: pytest --cov=poultry_edge --cov-report=term-missing -> github actions de forma automatica si han cambio en el codigo
 
 
+
+
 El script generate_mock_egg_results.py genera resultados de inferencia simulados durante cinco días para las tres granjas, respetando la estructura de naves y jaulas definida en los datos maestros.
-Además, introduce una anomalía controlada en una zona concreta de una batería, asignando egg_count = 0, para permitir posteriormente la validación del análisis y contextualización espacial de los fenotipos.
+Los datos incorporan variabilidad productiva entre jaulas y días, una anomalía espacial persistente en una zona concreta de una batería, una caída productiva temporal y un pequeño porcentaje de errores técnicos de inferencia. Estos escenarios permiten validar posteriormente las etapas de limpieza, contextualización, agregación y detección de anomalías del flujo de datos.
+
+Uploaded state: nuevo CSV
+   ↓
+PENDING
+   ↓
+fallo Azure
+   ↓
+FAILED
+   ↓
+siguiente ejecución
+   ↓
+se vuelve a intentar
+   ↓
+UPLOADED
 
 # Próximos pasos
 
