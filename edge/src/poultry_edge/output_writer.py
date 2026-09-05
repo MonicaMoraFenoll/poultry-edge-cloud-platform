@@ -19,7 +19,7 @@ TEMPORARY_FILE_SUFFIX = ".tmp"
 
 CSV_FIELD_NAMES = [
     "farm_id",
-    "house_id",
+    "house_number",
     "cage_id",
     "capture_date",
     "processing_date",

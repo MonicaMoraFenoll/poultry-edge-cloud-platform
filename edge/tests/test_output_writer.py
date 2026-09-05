@@ -25,7 +25,7 @@ def make_result(
 ) -> InferenceResult:
     return InferenceResult(
         farm_id=farm_id,
-        house_id="house_01",
+        house_number="house_01",
         cage_id="cage_001",
         capture_date="2026-08-03",
         processing_date=processing_date,
@@ -86,7 +86,7 @@ def test_result_to_csv_row():
     assert list(row.keys()) == CSV_FIELD_NAMES
 
     assert row["farm_id"] == "farm_01"
-    assert row["house_id"] == "house_01"
+    assert row["house_number"] == "house_01"
     assert row["cage_id"] == "cage_001"
 
     assert row["egg_count"] == 2
@@ -230,7 +230,7 @@ def test_write_inference_results(tmp_path):
     assert len(rows) == 2
 
     assert rows[0]["farm_id"] == "farm_01"
-    assert rows[0]["house_id"] == "house_01"
+    assert rows[0]["house_number"] == "house_01"
     assert rows[0]["cage_id"] == "cage_001"
 
     assert rows[0]["egg_count"] == "2"

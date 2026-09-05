@@ -70,7 +70,7 @@ DAILY_PRODUCTION_FACTORS = {
 
 CSV_FIELD_NAMES = [
     "farm_id",
-    "house_id",
+    "house_number",
     "cage_id",
     "capture_date",
     "processing_date",
@@ -151,8 +151,7 @@ FARMS = {
 
 def generate_all_cages() -> list[dict]:
     """
-    Generate exactly the same physical structure used by
-    the relational master data.
+    Generate the physical cage structure.
 
     cage_id starts at 1000 in each house and continues across
     all batteries of that house.
@@ -162,7 +161,7 @@ def generate_all_cages() -> list[dict]:
 
     for farm_id, farm_data in FARMS.items():
 
-        for house_id, batteries in farm_data["houses"].items():
+        for house_number, batteries in farm_data["houses"].items():
 
             next_cage_id = 1000
 
@@ -188,7 +187,7 @@ def generate_all_cages() -> list[dict]:
                             cages.append(
                                 {
                                     "farm_id": farm_id,
-                                    "house_id": house_id,
+                                    "house_number": house_number,
                                     "battery_number": battery_number,
                                     "cage_id": next_cage_id,
                                     "level": level,
@@ -220,7 +219,7 @@ def validate_cages(
 
         key = (
             cage["farm_id"],
-            cage["house_id"],
+            cage["house_number"],
             cage["cage_id"],
         )
 
@@ -277,7 +276,7 @@ def get_cage_productivity(
 
     value = stable_random_value(
         cage["farm_id"],
-        cage["house_id"],
+        cage["house_number"],
         cage["cage_id"],
     )
 
@@ -298,7 +297,7 @@ def is_spatial_anomaly(
     if cage["farm_id"] != ANOMALY_FARM:
         return False
 
-    if cage["house_id"] != ANOMALY_HOUSE:
+    if cage["house_number"] != ANOMALY_HOUSE:
         return False
 
     if cage["battery_number"] != ANOMALY_BATTERY:
@@ -402,6 +401,7 @@ def generate_egg_count(
 
     # Lower productivity increases the probability of zero eggs.
     if productivity < 1.0:
+
         difference = 1.0 - productivity
 
         probability_zero += (
@@ -414,6 +414,7 @@ def generate_egg_count(
 
     # Higher productivity increases the probability of two eggs.
     elif productivity > 1.0:
+
         difference = productivity - 1.0
 
         probability_two += (
@@ -542,6 +543,12 @@ def generate_daily_results(
             inference_status = "ERROR"
             error_message = technical_error
 
+            # Failed inference is slightly slower.
+            inference_duration_ms = random.randint(
+                250,
+                600,
+            )
+
         else:
 
             egg_count = generate_egg_count(
@@ -556,6 +563,11 @@ def generate_daily_results(
             inference_status = "SUCCESS"
             error_message = None
 
+            inference_duration_ms = random.randint(
+                80,
+                220,
+            )
+
         image_name = (
             f"cage_{cage['cage_id']}.jpg"
         )
@@ -563,13 +575,20 @@ def generate_daily_results(
         image_path = (
             f"/data/images/"
             f"{farm_id}/"
-            f"house_{cage['house_id']:02d}/"
+            f"house_{cage['house_number']:02d}/"
             f"{processing_date.year:04d}/"
             f"{processing_date.month:02d}/"
             f"{processing_date.day:02d}/"
             f"{image_name}"
         )
 
+        # Simulated image size.
+        image_size_bytes = random.randint(
+            120_000,
+            850_000,
+        )
+
+        # Daily processing starts at 11:00 UTC.
         inference_started_at = datetime(
             processing_date.year,
             processing_date.month,
@@ -579,8 +598,188 @@ def generate_daily_results(
             tzinfo=timezone.utc,
         )
 
+        # Simulate sequential inference start times.
         inference_started_at += timedelta(
             milliseconds=index * 50
         )
 
-        # Failed images take slightly longer on
+        rows.append(
+            {
+                "farm_id": farm_id,
+                "house_number": cage["house_number"],
+                "cage_id": cage["cage_id"],
+                "capture_date": processing_date.isoformat(),
+                "processing_date": processing_date.isoformat(),
+                "image_name": image_name,
+                "image_path": image_path,
+                "image_size_bytes": image_size_bytes,
+                "egg_count": egg_count,
+                "confidence": confidence,
+                "registered_model_name": REGISTERED_MODEL_NAME,
+                "model_version": MODEL_VERSION,
+                "model_alias": MODEL_ALIAS,
+                "model_synchronized_at": MODEL_SYNCHRONIZED_AT,
+                "inference_started_at": inference_started_at.isoformat(),
+                "inference_duration_ms": inference_duration_ms,
+                "inference_status": inference_status,
+                "error_message": error_message,
+            }
+        )
+
+    return pd.DataFrame(
+        rows,
+        columns=CSV_FIELD_NAMES,
+    )
+
+
+# ============================================================
+# SAVE DAILY RESULTS
+# ============================================================
+
+def save_daily_results(
+    dataframe: pd.DataFrame,
+    farm_id: str,
+    processing_date: date,
+) -> Path:
+    """
+    Save one daily inference CSV for one farm.
+    """
+
+    output_file = build_output_file(
+        farm_id=farm_id,
+        processing_date=processing_date,
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    dataframe.to_csv(
+        output_file,
+        index=False,
+    )
+
+    return output_file
+
+
+# ============================================================
+# SUMMARY
+# ============================================================
+
+def print_daily_summary(
+    dataframe: pd.DataFrame,
+    farm_id: str,
+    processing_date: date,
+    output_file: Path,
+) -> None:
+    """
+    Print a simple summary of each generated file.
+    """
+
+    total = len(dataframe)
+
+    success = (
+        dataframe["inference_status"]
+        .eq("SUCCESS")
+        .sum()
+    )
+
+    errors = (
+        dataframe["inference_status"]
+        .eq("ERROR")
+        .sum()
+    )
+
+    success_pct = (
+        success / total * 100
+        if total > 0
+        else 0
+    )
+
+    print(
+        f"{farm_id} | "
+        f"{processing_date} | "
+        f"{total:,} images | "
+        f"{success:,} successful "
+        f"({success_pct:.2f}%) | "
+        f"{errors:,} errors"
+    )
+
+    print(
+        f"  -> {output_file.resolve()}"
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main() -> None:
+
+    # Reproducible simulation.
+    random.seed(
+        RANDOM_SEED
+    )
+
+    print(
+        f"Output root: "
+        f"{OUTPUT_ROOT.resolve()}"
+    )
+
+    # Generate master cage structure.
+    cages = generate_all_cages()
+
+    # Validate cage identifiers.
+    validate_cages(
+        cages
+    )
+
+    print(
+        f"Generated cage structure: "
+        f"{len(cages):,} cages"
+    )
+
+    print()
+
+    # Generate one CSV per farm and day.
+    for day_offset in range(
+        NUMBER_OF_DAYS
+    ):
+
+        processing_date = (
+            START_DATE
+            + timedelta(
+                days=day_offset
+            )
+        )
+
+        for farm_id in FARMS:
+
+            dataframe = generate_daily_results(
+                cages=cages,
+                farm_id=farm_id,
+                processing_date=processing_date,
+            )
+
+            output_file = save_daily_results(
+                dataframe=dataframe,
+                farm_id=farm_id,
+                processing_date=processing_date,
+            )
+
+            print_daily_summary(
+                dataframe=dataframe,
+                farm_id=farm_id,
+                processing_date=processing_date,
+                output_file=output_file,
+            )
+
+    print()
+    print(
+        "Mock inference generation completed."
+    )
+
+
+if __name__ == "__main__":
+    main()
