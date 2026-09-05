@@ -2,32 +2,21 @@
 
 ## Descripción
 
-Este repositorio contiene la implementación de una plataforma
-**Edge-Cloud** para el conteo automático de huevos mediante visión por
-computador utilizando modelos YOLO.
+Este repositorio contiene la implementación de una plataforma **Edge-Cloud** para el conteo automático de huevos mediante visión por computador utilizando modelos YOLO.
 
-La arquitectura separa las responsabilidades entre el procesamiento en
-los dispositivos **Edge** y los servicios centralizados utilizados para
-la gestión de modelos y los datos:
+La arquitectura separa las responsabilidades entre el procesamiento en los dispositivos **Edge** y los servicios centralizados utilizados para la gestión de modelos y datos:
 
--   **Edge**: desplegado en cada granja, ejecuta la inferencia diaria,
-    mantiene una copia local del modelo y gestiona la transferencia de
-    los resultados.
--   **MLflow / Model Registry**: gestiona el versionado y la
-    distribución de los modelos utilizados por los dispositivos Edge.
--   **Azure Data Lake Storage Gen2 (ADLS)**: recibe los resultados
-    generados en las granjas para su posterior procesamiento en la
-    plataforma Cloud.
+- **Edge**: desplegado en cada granja, ejecuta la inferencia diaria, mantiene una copia local del modelo y gestiona la transferencia de los resultados.
+- **MLflow Model Registry**: gestiona el versionado y la distribución de los modelos utilizados por los dispositivos Edge.
+- **Azure Data Lake Storage Gen2 (ADLS Gen2)**: recibe los resultados generados en las granjas para su posterior procesamiento en la plataforma Cloud.
 
-El objetivo del diseño es utilizar **el mismo código y la misma imagen
-Docker en todas las granjas**, modificando únicamente la configuración
-asignada a cada dispositivo.
+El diseño permite utilizar **el mismo código y la misma imagen Docker en todas las granjas**, modificando únicamente la configuración asignada a cada dispositivo.
 
-------------------------------------------------------------------------
+---
 
 ## Estructura del repositorio
 
-``` text
+```text
 .
 ├── data/
 │   ├── outputs/
@@ -54,44 +43,27 @@ asignada a cada dispositivo.
 
 ### Responsabilidad de las carpetas
 
-  -----------------------------------------------------------------------
-  Carpeta                             Descripción
-  ----------------------------------- -----------------------------------
-  `data/`                             Datos utilizados durante el
-                                      desarrollo y resultados simulados.
+| Carpeta | Descripción |
+|---|---|
+| `data/` | Datos utilizados durante el desarrollo y resultados simulados. |
+| `edge/config/` | Configuración específica de cada dispositivo/granja. |
+| `edge/deployment/` | Scripts y unidades `systemd` utilizadas para aprovisionar y ejecutar el Edge. |
+| `edge/src/poultry_edge/` | Código Python de inferencia, gestión de modelos e ingesta. |
+| `edge/tests/` | Tests automatizados del componente Edge. |
+| `cloud/` | Componentes de la plataforma Cloud. |
+| `scripts/` | Scripts auxiliares para simulación y validación del prototipo. |
 
-  `poultry_edge/config/`              Configuración específica de cada
-                                      dispositivo/granja.
-
-  `poultry_edge/deployment/`          Scripts y unidades `systemd`
-                                      utilizadas para aprovisionar y
-                                      ejecutar el Edge.
-
-  `poultry_edge/src/poultry_edge/`    Código Python de inferencia,
-                                      gestión de modelos e ingesta.
-
-  `poultry_edge/tests/`               Tests automatizados del componente
-                                      Edge.
-
-  `cloud/`                            Componentes de la plataforma Cloud.
-
-  `scripts/`                          Scripts auxiliares para simulación
-                                      y validación del prototipo.
-  -----------------------------------------------------------------------
-
-------------------------------------------------------------------------
+---
 
 # 1. Datos simulados
 
 ## 1.1. Generación de imágenes simuladas
 
-Para desarrollar y validar el pipeline sin depender inicialmente de las
-imágenes de una instalación real, el proyecto incorpora un script para
-generar una estructura de imágenes simulada.
+Para desarrollar y validar el pipeline sin depender inicialmente de las imágenes de una instalación real, el proyecto incorpora un script para generar una estructura de imágenes simulada.
 
 Ejemplo:
 
-``` bash
+```bash
 python scripts/generate_mock_images.py \
     --houses 6 \
     --cages-per-house 20 \
@@ -101,7 +73,7 @@ python scripts/generate_mock_images.py \
 
 La estructura generada sigue el patrón:
 
-``` text
+```text
 data/simulated/
 ├── house_01/
 │   └── 2026/
@@ -113,39 +85,29 @@ data/simulated/
 └── ...
 ```
 
-Cada imagen representa una captura asociada a una jaula y una fecha. Los
-ficheros simulados permiten reproducir la organización que tendría el
-almacenamiento local de un dispositivo Edge.
+Cada imagen representa una captura asociada a una jaula y una fecha. Los ficheros simulados permiten reproducir la organización que tendría el almacenamiento local de un dispositivo Edge.
 
 ## 1.2. Generación de resultados de inferencia simulados
 
-El script `generate_mock_egg_results.py` genera resultados de inferencia
-simulados durante cinco días para las tres granjas, respetando la
-estructura de naves y jaulas definida en los datos maestros.
+El script `generate_mock_egg_results.py` genera resultados de inferencia simulados para las tres granjas, respetando la estructura de naves y jaulas definida en los datos maestros.
 
 Los datos incorporan:
 
--   variabilidad productiva entre jaulas y días;
--   una anomalía espacial persistente en una zona concreta de una
-    batería;
--   una caída productiva temporal;
--   un pequeño porcentaje de errores técnicos de inferencia.
+- variabilidad productiva entre jaulas y días;
+- una anomalía espacial persistente en una zona concreta de una batería;
+- una caída productiva temporal;
+- un pequeño porcentaje de errores técnicos de inferencia.
 
-Estos escenarios permiten validar posteriormente las etapas de limpieza,
-contextualización, agregación y detección de anomalías del flujo de
-datos.
+Estos escenarios permiten validar posteriormente las etapas de limpieza, contextualización, agregación y detección de anomalías del flujo de datos.
 
-------------------------------------------------------------------------
+---
 
 # 2. Componente Edge
 
-Cada granja dispone conceptualmente de un dispositivo Edge
-independiente. Todos utilizan la misma aplicación y la misma imagen
-Docker; las diferencias entre instalaciones se definen mediante el
-fichero de configuración asignado al dispositivo.
+Cada granja dispone conceptualmente de un dispositivo Edge independiente. Todos utilizan la misma aplicación y la misma imagen Docker; las diferencias entre instalaciones se definen mediante el fichero de configuración asignado al dispositivo.
 
-``` text
-poultry_edge/
+```text
+edge/
 ├── config/
 ├── deployment/
 ├── src/
@@ -157,40 +119,44 @@ poultry_edge/
 
 ## 2.1. Configuración del Edge
 
-Cada dispositivo utiliza un único fichero YAML:
+Cada instalación dispone de un fichero YAML específico:
 
-``` text
-poultry_edge/config/
+```text
+edge/config/
 ├── farm_01.yml
 ├── farm_02.yml
 └── farm_03.yml
 ```
 
+Durante el aprovisionamiento, el fichero correspondiente a la granja se instala en el dispositivo como:
+
+```text
+/opt/poultry-edge/config/edge.yaml
+```
+
 El fichero define, entre otros:
 
--   identificador de la granja;
--   ubicación de las imágenes;
--   directorio de resultados;
--   modelo registrado en MLflow;
--   alias del modelo asignado a la granja;
--   directorio local de modelos;
--   extensiones de imagen soportadas;
--   ubicación de la base de datos local utilizada para mantener el
-    estado de las transferencias.
+- identificador de la granja;
+- ubicación de las imágenes;
+- directorio de resultados;
+- modelo registrado en MLflow;
+- alias del modelo asignado a la granja;
+- directorio local de modelos;
+- extensiones de imagen soportadas;
+- ubicación de la base de datos local utilizada para mantener el estado de las transferencias.
 
 Ejemplo de configuración del modelo:
 
-``` yaml
+```yaml
 model:
   registered_name: egg_detector
   alias: farm_01_production
   local_root_directory: /app/models
 ```
 
-De esta forma, la misma imagen Docker puede desplegarse en diferentes
-granjas cambiando únicamente `edge.yaml`.
+De esta forma, la misma imagen Docker puede desplegarse en diferentes granjas cambiando únicamente la configuración instalada como `edge.yaml`.
 
-------------------------------------------------------------------------
+---
 
 # 3. Pipeline de inferencia
 
@@ -198,39 +164,23 @@ granjas cambiando únicamente `edge.yaml`.
 
 El pipeline está implementado en:
 
-``` text
-poultry_edge/src/poultry_edge/
+```text
+edge/src/poultry_edge/
 ```
 
-  -----------------------------------------------------------------------
-  Módulo                              Responsabilidad
-  ----------------------------------- -----------------------------------
-  `config.py`                         Carga y validación del fichero YAML
-                                      asignado al Edge.
-
-  `image_discovery.py`                Descubrimiento de las imágenes
-                                      correspondientes a la fecha de
-                                      procesamiento.
-
-  `model_loader.py`                   Resolución de la versión activa en
-                                      MLflow, sincronización local y
-                                      fallback.
-
-  `inference.py`                      Ejecución de la inferencia YOLO
-                                      sobre las imágenes descubiertas.
-
-  `output_writer.py`                  Escritura de los resultados de
-                                      inferencia en CSV.
-
-  `pipeline.py`                       Orquestación del pipeline diario.
-
-  `main.py`                           Punto de entrada de la aplicación
-                                      de inferencia.
-  -----------------------------------------------------------------------
+| Módulo | Responsabilidad |
+|---|---|
+| `config.py` | Carga y validación del fichero YAML asignado al Edge. |
+| `image_discovery.py` | Descubrimiento de las imágenes correspondientes a la fecha de procesamiento. |
+| `model_loader.py` | Resolución de la versión activa en MLflow, sincronización local y fallback. |
+| `inference.py` | Ejecución de la inferencia YOLO sobre las imágenes descubiertas. |
+| `output_writer.py` | Escritura de los resultados de inferencia en CSV. |
+| `pipeline.py` | Orquestación del pipeline diario. |
+| `main.py` | Punto de entrada de la aplicación de inferencia. |
 
 ## 3.2. Flujo de ejecución
 
-``` text
+```text
 Carga de configuración
         │
         ▼
@@ -255,7 +205,7 @@ La salida corresponde únicamente a la fecha procesada.
 
 Los resultados se almacenan en una estructura persistente:
 
-``` text
+```text
 data/outputs/
 └── YYYY/
     └── MM/
@@ -263,22 +213,22 @@ data/outputs/
             └── egg_prediction.csv
 ```
 
-Cada fila representa una imagen procesada e incluye información como:
+Cada fila representa una imagen procesada e incluye:
 
--   `farm_id`;
--   `house_id`;
--   `cage_id`;
--   fecha de captura y procesamiento;
--   nombre y ruta de la imagen;
--   tamaño del fichero;
--   `egg_count`;
--   confianza;
--   nombre, versión y alias del modelo;
--   fecha de sincronización del modelo;
--   duración de la inferencia;
--   estado de inferencia y mensaje de error.
+- `farm_id`;
+- `house_id`;
+- `cage_id`;
+- fecha de captura y procesamiento;
+- nombre y ruta de la imagen;
+- tamaño del fichero;
+- `egg_count`;
+- confianza;
+- nombre, versión y alias del modelo;
+- fecha de sincronización del modelo;
+- duración de la inferencia;
+- estado de inferencia y mensaje de error.
 
-------------------------------------------------------------------------
+---
 
 # 4. Gestión y distribución de modelos con MLflow
 
@@ -286,42 +236,37 @@ Cada fila representa una imagen procesada e incluye información como:
 
 Los modelos se gestionan mediante **MLflow Model Registry**.
 
-En lugar de mantener un modelo registrado diferente para cada granja, se
-utiliza un único modelo por tarea:
+En lugar de mantener un modelo registrado diferente para cada granja, se utiliza un único modelo por tarea:
 
-``` text
+```text
 egg_detector
 ```
 
-Cada entrenamiento genera una nueva versión dentro del mismo modelo
-registrado.
+Cada entrenamiento genera una nueva versión dentro del mismo modelo registrado.
 
 Las versiones pueden incluir tags descriptivos, por ejemplo:
 
-``` text
+```text
 farm_id = farm_01
 task = egg_detection
 model_type = YOLO
 mock_model = true
 ```
 
-Los **tags** se utilizan para aportar trazabilidad y contexto, mientras
-que los **aliases** determinan qué versión debe utilizar cada
-instalación.
+Los **tags** proporcionan trazabilidad y contexto, mientras que los **aliases** determinan qué versión debe utilizar cada instalación.
 
 Ejemplo:
 
-``` text
+```text
 egg_detector
 ├── version 1 → farm_01_production
 ├── version 2 → farm_02_production
 └── version 3 → farm_03_production
 ```
 
-Cuando se registra una nueva versión para una granja, el alias
-correspondiente puede reasignarse:
+Cuando se registra una nueva versión para una granja, el alias correspondiente puede reasignarse:
 
-``` text
+```text
 Antes:
 farm_01_production → version 1
 
@@ -329,8 +274,7 @@ Después:
 farm_01_production → version 4
 ```
 
-La versión anterior permanece registrada en MLflow, permitiendo mantener
-el histórico y realizar un rollback si fuera necesario.
+La versión anterior permanece registrada en MLflow, manteniendo el histórico y permitiendo realizar un rollback si fuera necesario.
 
 ## 4.2. Registro de modelos de prueba
 
@@ -338,19 +282,19 @@ Para validar el mecanismo se utiliza `register_mock_model.py`.
 
 Primero se inicia un servidor MLflow local:
 
-``` bash
+```bash
 mlflow server --host 127.0.0.1 --port 5000
 ```
 
 En PowerShell puede configurarse:
 
-``` powershell
+```powershell
 $env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
 ```
 
 Ejemplo de registro:
 
-``` bash
+```bash
 python scripts/register_mock_model.py \
     --model-path <path_to_model.pt> \
     --farm-id farm_01
@@ -358,29 +302,27 @@ python scripts/register_mock_model.py \
 
 El script:
 
-1.  registra el artefacto del modelo;
-2.  crea una nueva versión de `egg_detector`;
-3.  añade metadatos y tags;
-4.  asigna el alias `<farm_id>_production`.
+1. registra el artefacto del modelo;
+2. crea una nueva versión de `egg_detector`;
+3. añade metadatos y tags;
+4. asigna el alias `<farm_id>_production`.
 
 ## 4.3. Sincronización en el Edge
 
-`model_loader.py` consulta en MLflow la versión asociada al alias
-configurado en `edge.yaml`.
+`model_loader.py` consulta en MLflow la versión asociada al alias configurado en `edge.yaml`.
 
 Por ejemplo:
 
-``` text
+```text
 registered_name = egg_detector
 alias = farm_01_production
 ```
 
-El Edge resuelve el alias, identifica la versión activa y la almacena
-localmente.
+El Edge resuelve el alias, identifica la versión activa y la sincroniza con el almacenamiento local.
 
 La estructura local sigue el patrón:
 
-``` text
+```text
 models/
 └── egg_detector/
     ├── versions/
@@ -389,14 +331,13 @@ models/
     └── current.json
 ```
 
-`current.json` mantiene la referencia a la última versión sincronizada
-correctamente.
+`current.json` mantiene la referencia a la última versión sincronizada correctamente.
 
-Si MLflow no está disponible temporalmente y existe una versión local
-válida, el pipeline puede utilizarla como **fallback**, evitando que una
-pérdida de conectividad impida necesariamente la inferencia.
+Si la versión resuelta ya está disponible localmente, se reutiliza sin necesidad de volver a descargarla. Si MLflow no está disponible temporalmente y existe una versión local válida, el pipeline puede utilizar la última versión sincronizada como **fallback**.
 
-------------------------------------------------------------------------
+La sincronización puede validarse mediante `test_mlflow_sync.py`, que permite comprobar la resolución del alias, la versión obtenida y la ubicación de la copia local sincronizada.
+
+---
 
 # 5. Contenedorización
 
@@ -404,29 +345,28 @@ La aplicación Edge se distribuye mediante una imagen Docker común.
 
 El `Dockerfile`:
 
--   utiliza una imagen base NVIDIA/PyTorch;
--   instala las dependencias del sistema;
--   instala las dependencias Python;
--   instala el paquete `poultry-edge`;
--   contiene tanto la funcionalidad de inferencia como la de ingesta.
+- utiliza una imagen base NVIDIA/PyTorch;
+- instala las dependencias del sistema;
+- instala las dependencias Python;
+- instala el paquete `poultry-edge`;
+- contiene tanto la funcionalidad de inferencia como la de ingesta.
 
 El paquete define dos entry points:
 
-``` text
+```text
 poultry-edge
 poultry-edge-upload
 ```
 
 Por defecto, la imagen ejecuta:
 
-``` dockerfile
+```dockerfile
 CMD ["poultry-edge"]
 ```
 
-Por tanto, la misma imagen puede utilizarse para dos procesos
-independientes:
+Por tanto, la misma imagen se utiliza para dos procesos independientes:
 
-``` text
+```text
 MISMA IMAGEN DOCKER
         │
         ├── poultry-edge
@@ -436,25 +376,24 @@ MISMA IMAGEN DOCKER
                 └── ingesta
 ```
 
-No se mantienen dos imágenes Docker diferentes.
+No se mantienen imágenes Docker diferentes para ambos procesos.
 
-------------------------------------------------------------------------
+---
 
 # 6. CI/CD y despliegue del Edge
 
-La arquitectura de CI/CD utiliza **GitHub Actions, Docker y runners
-autoalojados**.
+La estrategia de CI/CD utiliza **GitHub Actions, Docker y GitHub Container Registry (GHCR)**, separando la construcción del software, el aprovisionamiento inicial de los dispositivos y el despliegue de nuevas versiones.
 
-Se distinguen tres procesos de despliegue y un proceso operativo:
+Durante el prototipo, los tests, la construcción de la imagen y las simulaciones de aprovisionamiento y despliegue se ejecutaron mediante runners proporcionados por GitHub. En un entorno con dispositivos Edge físicos, el aprovisionamiento y despliegue requerirán *self-hosted runners* con acceso a los dispositivos o un mecanismo equivalente de despliegue remoto.
 
-1.  construcción de la imagen Docker;
-2.  aprovisionamiento del dispositivo;
-3.  despliegue de una versión;
-4.  ejecución programada de los procesos Edge.
+Se distinguen cuatro procesos:
 
-## 6.1. Workflows de Githbub Actions
+1. construcción de la imagen Docker;
+2. aprovisionamiento del dispositivo;
+3. despliegue de una versión;
+4. ejecución programada de los procesos Edge.
 
-Los procesos de integración, aprovisionamiento y despliegue se automatizan mediante GitHub Actions.
+## 6.1. Workflows de GitHub Actions
 
 Los workflows se encuentran en:
 
@@ -466,46 +405,36 @@ Los workflows se encuentran en:
 ├── simulated-edge-deploy.yml
 ├── simulated-edge-provisioning.yml
 └── test-edge.yml
-
 ```
-| Workflow                          | Responsabilidad                                                                                                              |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `test-edge.yml`                   | Ejecutar automáticamente los tests del componente Edge y validar los cambios realizados en el código.                        |
-| `build-edge-image.yml`            | Construir la imagen Docker de la aplicación Edge y publicarla en el registro de contenedores.                                |
-| `edge-provisioning.yml`           | Preparar un nuevo dispositivo Edge físico e instalar su configuración, estructura persistente, scripts y unidades `systemd`. |
-| `edge-deploy.yml`                 | Desplegar una versión concreta de la imagen Docker sobre un dispositivo Edge previamente aprovisionado.                      |
-| `simulated-edge-provisioning.yml` | Reproducir el proceso de aprovisionamiento utilizando directorios locales que simulan diferentes dispositivos Edge.          |
-| `simulated-edge-deploy.yml`       | Simular el despliegue de una versión de la aplicación sin necesidad de disponer de los dispositivos Edge físicos.            |
 
+| Workflow | Responsabilidad |
+|---|---|
+| `test-edge.yml` | Ejecutar automáticamente los tests del componente Edge y validar los cambios realizados en el código. |
+| `build-edge-image.yml` | Ejecutar los tests y, únicamente si son satisfactorios, construir la imagen Docker y publicarla en GHCR. |
+| `edge-provisioning.yml` | Preparar un nuevo dispositivo Edge físico e instalar su configuración, estructura persistente, scripts y unidades `systemd`. |
+| `edge-deploy.yml` | Desplegar una versión concreta de la imagen Docker sobre un dispositivo Edge previamente aprovisionado. |
+| `simulated-edge-provisioning.yml` | Reproducir el aprovisionamiento utilizando directorios locales que simulan diferentes dispositivos Edge. |
+| `simulated-edge-deploy.yml` | Simular el despliegue de una versión sin disponer de dispositivos Edge físicos. |
 
 ## 6.2. Construcción de la imagen Docker
 
-Workflow:
+El workflow:
 
-``` text
+```text
 .github/workflows/build-edge-image.yml
 ```
 
-Responsabilidades:
+ejecuta los tests automatizados y, si finalizan correctamente, construye la imagen Docker y la publica en **GHCR** con las etiquetas definidas para su versionado.
 
--   construir la imagen Docker;
--   instalar las dependencias;
--   instalar el paquete Python;
--   ejecutar las validaciones definidas en CI;
--   publicar la imagen en GitHub Container Registry (GHCR).
-
-La construcción se realiza en la infraestructura de GitHub Actions y no
-requiere utilizar los recursos de los dispositivos Edge.
+La construcción se realiza en la infraestructura de GitHub Actions y no requiere utilizar los recursos de los dispositivos Edge.
 
 ## 6.3. Aprovisionamiento
 
-El aprovisionamiento se realiza cuando se incorpora un nuevo
-dispositivo.
+El aprovisionamiento se realiza únicamente cuando se incorpora un nuevo dispositivo.
 
-`install_edge.sh` recibe el fichero YAML correspondiente a la granja y
-prepara la estructura persistente:
+`install_edge.sh` recibe el fichero YAML correspondiente a la granja y prepara la estructura persistente:
 
-``` text
+```text
 /opt/poultry-edge/
 ├── config/
 │   └── edge.yaml
@@ -526,37 +455,33 @@ prepara la estructura persistente:
 
 Además, instala las unidades `systemd` necesarias.
 
-El código Python no se copia directamente al Edge: se distribuye dentro
-de la imagen Docker.
+El código Python no se copia directamente al Edge: se distribuye dentro de la imagen Docker.
 
-Para simulaciones puede utilizarse un directorio de instalación
-alternativo. En ese caso, el script crea la estructura local sin
-modificar el `systemd` real del equipo.
+Para las simulaciones puede utilizarse un directorio de instalación alternativo. En este caso, el script crea la estructura local sin modificar el `systemd` real del equipo.
 
 ## 6.4. Despliegue de nuevas versiones
 
-El workflow de despliegue permite seleccionar una versión concreta de la
-imagen y desplegarla en un Edge determinado.
+El workflow de despliegue permite seleccionar una versión concreta de la imagen Docker y desplegarla en un Edge previamente aprovisionado.
 
 El proceso realiza:
 
--   autenticación en GHCR;
--   descarga (`pull`) de la imagen seleccionada;
--   configuración del Edge para utilizar esa versión en ejecuciones
-    posteriores.
+- autenticación en GHCR;
+- descarga (`pull`) de la imagen seleccionada;
+- configuración del Edge para utilizar esa versión en las ejecuciones posteriores.
 
-Esto permite desplegar una versión inicialmente en una instalación
-concreta antes de extenderla al resto.
+La configuración de la granja y los datos persistentes no se reemplazan durante el despliegue.
 
-------------------------------------------------------------------------
+Esto permite desplegar una nueva versión inicialmente en una instalación concreta antes de extenderla al resto.
+
+---
 
 # 7. Ejecución automática de la inferencia
 
-La ejecución diaria es independiente del despliegue.
+La ejecución diaria de la inferencia es independiente del despliegue del software.
 
 Intervienen:
 
-``` text
+```text
 poultry-edge.timer
 poultry-edge.service
 run_edge.sh
@@ -564,7 +489,7 @@ run_edge.sh
 
 Flujo:
 
-``` text
+```text
 poultry-edge.timer
         │
         ▼
@@ -588,30 +513,24 @@ Pipeline de inferencia
 
 `run_edge.sh` monta en el contenedor:
 
--   `edge.yaml`;
--   imágenes;
--   resultados;
--   modelos locales.
+- `edge.yaml`;
+- imágenes;
+- resultados;
+- modelos locales.
 
-El contenedor necesita GPU para ejecutar la inferencia.
+El contenedor necesita acceso a GPU para ejecutar la inferencia.
 
-Al utilizar `docker run --rm`, el contenedor es **efímero**: desaparece
-al terminar la ejecución. Los datos importantes permanecen en el host
-mediante los directorios montados.
+Al utilizar `docker run --rm`, el contenedor es **efímero** y desaparece al terminar la ejecución. La configuración y los datos permanecen en el host mediante los directorios montados.
 
-------------------------------------------------------------------------
+---
 
 # 8. Ingesta de resultados hacia Azure
 
-La ingesta se implementa como un proceso **independiente de la
-inferencia**.
-
-El objetivo es que una interrupción de conectividad con Azure no impida
-generar los resultados localmente.
+La ingesta se implementa como un proceso **independiente de la inferencia**, evitando que una interrupción de conectividad con Azure impida generar los resultados localmente.
 
 Flujo general:
 
-``` text
+```text
 Resultados locales
         │
         ▼
@@ -636,22 +555,20 @@ Verificación
 
 ## 8.1. `upload_state.py`
 
-Gestiona la base de datos SQLite que mantiene el estado persistente de
-las transferencias.
+Gestiona la base de datos SQLite utilizada para mantener el estado persistente de las transferencias.
 
 Responsabilidades:
 
--   inicializar la base de datos;
--   registrar nuevos ficheros como `PENDING`;
--   almacenar el número de intentos;
--   registrar la fecha del último intento;
--   marcar transferencias como `FAILED`;
--   almacenar el último error;
--   marcar transferencias como `UPLOADED`;
--   recuperar registros `PENDING` y `FAILED`.
+- inicializar la base de datos;
+- registrar nuevos ficheros como `PENDING`;
+- almacenar el número de intentos;
+- registrar la fecha del último intento;
+- marcar transferencias como `FAILED`;
+- almacenar el último error;
+- marcar transferencias como `UPLOADED`;
+- recuperar registros `PENDING` y `FAILED`.
 
-El estado se almacena fuera del contenedor, en el directorio persistente
-`data/state/`.
+El estado se almacena fuera del contenedor en el directorio persistente `data/state/`.
 
 ## 8.2. `upload_discovery.py`
 
@@ -659,21 +576,19 @@ Descubre nuevos `egg_prediction.csv` generados por la inferencia.
 
 Estructura local:
 
-``` text
+```text
 /app/data/outputs/YYYY/MM/DD/egg_prediction.csv
 ```
 
-Utiliza el `farm_id` del `edge.yaml` para construir la ruta remota:
+Utiliza el `farm_id` definido en `edge.yaml` para construir la ruta remota:
 
-``` text
+```text
 farm_id/YYYY/MM/DD/egg_prediction.csv
 ```
 
-De esta forma, cada Edge envía únicamente los resultados
-correspondientes a su propia granja.
+De esta forma, cada Edge envía únicamente los resultados correspondientes a su propia granja.
 
-Los nuevos ficheros se registran en SQLite antes de intentar la
-transferencia.
+Los nuevos ficheros se registran en SQLite antes de intentar la transferencia.
 
 ## 8.3. `cloud_uploader.py`
 
@@ -681,31 +596,28 @@ Encapsula la comunicación con **Azure Data Lake Storage Gen2**.
 
 Responsabilidades:
 
--   crear el cliente ADLS;
--   subir el fichero;
--   consultar las propiedades del fichero remoto;
--   verificar la transferencia comparando el tamaño local y remoto;
--   generar un error cuando la verificación falla.
+- crear el cliente ADLS;
+- subir el fichero;
+- consultar las propiedades del fichero remoto;
+- verificar la transferencia comparando el tamaño local y remoto;
+- generar un error cuando la verificación falla.
 
-El fichero solo se considera transferido correctamente después de
-superar la verificación.
+El fichero solo se considera transferido correctamente después de superar la verificación.
 
 ## 8.4. `upload_manager.py`
 
-Orquesta los reintentos.
+Gestiona el procesamiento y reintento de las transferencias.
 
 Recupera los registros con estado:
 
-``` text
+```text
 PENDING
 FAILED
 ```
 
-y procesa cada fichero de manera independiente.
+y procesa cada fichero de forma independiente.
 
-Resultado:
-
-``` text
+```text
 PENDING / FAILED ── éxito ──> UPLOADED
 PENDING / FAILED ── error ──> FAILED
 ```
@@ -714,40 +626,37 @@ El fallo de un fichero no detiene el procesamiento de los demás.
 
 ## 8.5. `upload_results.py`
 
-Es el punto de entrada de la ingesta.
+Es el punto de entrada del proceso de ingesta.
 
 Responsabilidades:
 
-1.  cargar `edge.yaml`;
-2.  obtener `farm_id`, `outputs` y `state_database`;
-3.  inicializar SQLite;
-4.  descubrir nuevos resultados;
-5.  crear el cliente ADLS;
-6.  procesar `PENDING` y `FAILED`;
-7.  registrar el resumen de la ejecución.
+1. cargar `edge.yaml`;
+2. obtener `farm_id`, `outputs` y `state_database`;
+3. inicializar SQLite;
+4. descubrir nuevos resultados;
+5. crear el cliente ADLS;
+6. procesar los registros `PENDING` y `FAILED`;
+7. registrar el resumen de la ejecución.
 
 El paquete expone este proceso mediante:
 
-``` text
+```text
 poultry-edge-upload
 ```
 
-En el prototipo, el nombre de la cuenta de almacenamiento y el
-filesystem `landing` se mantienen definidos estáticamente en este
-módulo.
+En el prototipo, el nombre de la cuenta de almacenamiento y el filesystem `landing` se mantienen definidos estáticamente en este módulo.
 
 ## 8.6. `run_upload.sh`
 
-Ejecuta la ingesta dentro de la misma imagen Docker utilizada para
-inferencia, sobrescribiendo el comando por defecto:
+Ejecuta la ingesta dentro de la misma imagen Docker utilizada para la inferencia, sobrescribiendo el comando por defecto:
 
-``` text
+```text
 docker run ... IMAGE poultry-edge-upload
 ```
 
-Monta únicamente:
+Monta únicamente los recursos necesarios:
 
-``` text
+```text
 config  → lectura
 outputs → lectura
 state   → lectura/escritura
@@ -759,7 +668,7 @@ La ingesta no requiere GPU.
 
 Intervienen:
 
-``` text
+```text
 poultry-edge-upload.timer
 poultry-edge-upload.service
 run_upload.sh
@@ -767,7 +676,7 @@ run_upload.sh
 
 Flujo:
 
-``` text
+```text
 poultry-edge-upload.timer
         │
         ▼
@@ -797,100 +706,66 @@ Azure Data Lake Storage Gen2
 Landing
 ```
 
-Inferencia e ingesta crean **contenedores efímeros independientes a
-partir de la misma imagen Docker**. Esto permite reintentar
-transferencias sin volver a ejecutar la inferencia.
+Inferencia e ingesta crean **contenedores efímeros independientes a partir de la misma imagen Docker**. Esto permite reintentar las transferencias sin volver a ejecutar la inferencia.
 
-------------------------------------------------------------------------
+## 8.8. Validación del estado persistente
+
+El mecanismo de persistencia puede validarse mediante el script de prueba correspondiente, que reproduce de forma controlada la transición:
+
+```text
+PENDING → FAILED → UPLOADED
+```
+
+La prueba permite comprobar la actualización persistente del estado, el número de intentos, el último error y las marcas temporales asociadas a la transferencia.
+
+---
 
 # 9. Tests y calidad del código
 
-Los tests del componente Edge se encuentran en:
+Los tests automatizados del componente Edge se encuentran en:
 
-``` text
-poultry_edge/tests/
+```text
+edge/tests/
 ```
 
-Pueden ejecutarse con:
+Pueden ejecutarse mediante:
 
-``` bash
+```bash
 pytest
 ```
 
 Para comprobar la cobertura:
 
-``` bash
+```bash
 pytest --cov=poultry_edge --cov-report=term-missing
 ```
 
-La validación automatizada se integra en GitHub Actions para detectar
-errores cuando se realizan cambios en el código.
+Los tests cubren las principales responsabilidades del Edge, incluyendo:
 
-Los tests cubren las principales responsabilidades del Edge, incluyendo
-configuración, descubrimiento de imágenes, inferencia, sincronización de
-modelos, generación de resultados y mecanismos asociados a la ingesta.
+- configuración;
+- descubrimiento de imágenes;
+- inferencia;
+- sincronización y fallback de modelos;
+- generación de resultados;
+- descubrimiento y estado persistente de transferencias;
+- gestión y orquestación de la ingesta.
 
-------------------------------------------------------------------------
+En la validación actual, la batería de tests alcanza una **cobertura global de código del 93 %**.
 
-# 10. Resumen de responsabilidades
+La validación automatizada se integra en GitHub Actions para detectar errores ante cambios en el código y evitar la construcción de una nueva imagen cuando los tests no finalizan correctamente.
 
-  -------------------------------------------------------------------------
-  Componente                            Responsabilidad
-  ------------------------------------- -----------------------------------
-  `config.py`                           Configuración específica del Edge.
+---
 
-  `image_discovery.py`                  Localizar las imágenes que deben
-                                        procesarse.
+# 10. Flujo completo del Edge
 
-  `model_loader.py`                     Resolver, sincronizar y recuperar
-                                        modelos desde MLflow.
-
-  `inference.py`                        Ejecutar YOLO.
-
-  `output_writer.py`                    Persistir los resultados diarios.
-
-  `pipeline.py`                         Orquestar la inferencia.
-
-  `main.py`                             Entry point `poultry-edge`.
-
-  `upload_state.py`                     Mantener el estado persistente de
-                                        transferencias.
-
-  `upload_discovery.py`                 Detectar nuevos resultados y
-                                        construir su ruta remota.
-
-  `cloud_uploader.py`                   Comunicación y verificación con
-                                        ADLS.
-
-  `upload_manager.py`                   Procesar y reintentar
-                                        transferencias.
-
-  `upload_results.py`                   Orquestar la ingesta.
-
-  `run_edge.sh`                         Crear el contenedor de inferencia.
-
-  `run_upload.sh`                       Crear el contenedor de ingesta.
-
-  `install_edge.sh`                     Preparar una nueva instalación
-                                        Edge.
-
-  `poultry-edge.service/timer`          Automatizar la inferencia.
-
-  `poultry-edge-upload.service/timer`   Automatizar la ingesta.
-  -------------------------------------------------------------------------
-
-------------------------------------------------------------------------
-
-# 11. Flujo completo del Edge
-
-``` text
+```text
                          MLflow Model Registry
                                  │
-                     egg_detector + farm alias
+                    egg_detector + farm alias
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                         EDGE                                │
+│                            EDGE                             │
 │                                                             │
 │  Images                                                     │
 │    │                                                        │
@@ -901,8 +776,8 @@ modelos, generación de resultados y mecanismos asociados a la ingesta.
 │  run_edge.sh → Docker → poultry-edge                        │
 │                         │                                   │
 │                         ├── sincronización del modelo        │
-│                         ├── inferencia                      │
-│                         └── egg_prediction.csv              │
+│                         ├── inferencia                       │
+│                         └── egg_prediction.csv               │
 │                                      │                      │
 │                                      ▼                      │
 │                               data/outputs                  │
@@ -911,22 +786,27 @@ modelos, generación de resultados y mecanismos asociados a la ingesta.
 │                        poultry-edge-upload.timer             │
 │                                      │                      │
 │                                      ▼                      │
-│                       run_upload.sh → Docker                 │
+│                        run_upload.sh → Docker                │
 │                                      │                      │
 │                                      ▼                      │
 │                           poultry-edge-upload                │
 │                                      │                      │
-│                         SQLite state + reintentos            │
+│                          SQLite state + reintentos           │
 └──────────────────────────────────────┼──────────────────────┘
                                        │
                                        ▼
-                         Azure Data Lake Storage
+                          Azure Data Lake Storage
                                        │
                                        ▼
                                     Landing
 ```
 
-La arquitectura mantiene separados el ciclo de inferencia, la
-distribución de modelos y la transferencia de resultados, conservando
-localmente los elementos necesarios para tolerar interrupciones
-temporales de conectividad.
+La arquitectura mantiene separados el ciclo de inferencia, la distribución de modelos y la transferencia de resultados, conservando localmente los elementos necesarios para tolerar interrupciones temporales de conectividad.
+
+---
+
+# 11. Cloud
+
+La implementación del procesamiento Cloud se incorporará en esta sección una vez completados los componentes correspondientes.
+
+La arquitectura prevista parte de los resultados recibidos en **Landing** y contempla su procesamiento mediante una arquitectura Medallion, su integración con los datos maestros y la generación de conjuntos de datos preparados para su posterior explotación.
