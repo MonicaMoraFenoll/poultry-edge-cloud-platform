@@ -7,20 +7,10 @@ from azure.storage.filedatalake import DataLakeServiceClient
 STORAGE_ACCOUNT_NAME = "mastermmf001sta"
 FILE_SYSTEM_NAME = "landing"
 
-LOCAL_FILE = Path(
-    r"C:\Users\monic\Desktop\Cursos\Master\TFM\codigo"
-    r"\poultry-edge-cloud-platform\data\outputs"
-    r"\farm_01\2026\08\01\egg_prediction.csv"
-)
-
-REMOTE_PATH = "farm_01/2026/08/01/egg_prediction.csv"
+OUTPUT_ROOT = Path("data") / "outputs"
 
 
 def main() -> None:
-    # --------------------------------------------------------
-    # Authenticate using the current Azure CLI session
-    # --------------------------------------------------------
-
     credential = AzureCliCredential()
 
     service_client = DataLakeServiceClient(
@@ -36,33 +26,64 @@ def main() -> None:
         )
     )
 
-    # --------------------------------------------------------
-    # Check local file
-    # --------------------------------------------------------
-
-    if not LOCAL_FILE.is_file():
-        raise FileNotFoundError(
-            f"Local file not found: {LOCAL_FILE}"
-        )
-
-    print(f"Local file: {LOCAL_FILE}")
-    print(f"Remote path: {REMOTE_PATH}")
-
-    # --------------------------------------------------------
-    # Upload
-    # --------------------------------------------------------
-
-    file_client = file_system_client.get_file_client(
-        REMOTE_PATH
+    csv_files = sorted(
+        OUTPUT_ROOT.rglob("egg_prediction.csv")
     )
 
-    with LOCAL_FILE.open("rb") as local_file:
-        file_client.upload_data(
-            local_file,
-            overwrite=True,
+    if not csv_files:
+        raise FileNotFoundError(
+            f"No CSV files found in '{OUTPUT_ROOT}'."
         )
 
-    print("Upload completed successfully.")
+    successful_uploads = 0
+    failed_uploads = 0
+
+    for local_file in csv_files:
+
+        relative_path = local_file.relative_to(
+            OUTPUT_ROOT
+        )
+
+        remote_path = relative_path.as_posix()
+
+        print()
+        print(f"Local file:  {local_file}")
+        print(f"Remote path: {remote_path}")
+
+        file_client = (
+            file_system_client.get_file_client(
+                remote_path
+            )
+        )
+
+        try:
+            with local_file.open("rb") as file_data:
+                file_client.upload_data(
+                    file_data,
+                    overwrite=True,
+                )
+
+            successful_uploads += 1
+
+            print("Upload completed successfully.")
+
+        except Exception as exc:
+            failed_uploads += 1
+
+            print(f"Upload failed: {exc}")
+
+    total_files = len(csv_files)
+
+    success_rate = (
+        successful_uploads / total_files * 100
+    )
+
+    print()
+    print("----- TRANSFER SUMMARY -----")
+    print(f"Total files:       {total_files}")
+    print(f"Successful:        {successful_uploads}")
+    print(f"Failed:            {failed_uploads}")
+    print(f"Success rate:      {success_rate:.2f} %")
 
 
 if __name__ == "__main__":
