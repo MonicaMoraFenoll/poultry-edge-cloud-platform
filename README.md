@@ -32,6 +32,8 @@ El diseño permite utilizar **el mismo código y la misma imagen Docker en todas
 │   └── pyproject.toml
 │
 ├── cloud/
+|     |── lakehouse/
+|     |── app/              
 │
 ├── scripts/
 │   ├── generate_mock_images.py
@@ -216,7 +218,7 @@ data/outputs/
 Cada fila representa una imagen procesada e incluye:
 
 - `farm_id`;
-- `house_id`;
+- `house_number`;
 - `cage_id`;
 - fecha de captura y procesamiento;
 - nombre y ruta de la imagen;
@@ -710,7 +712,7 @@ Inferencia e ingesta crean **contenedores efímeros independientes a partir de l
 
 ## 8.8. Validación del estado persistente
 
-El mecanismo de persistencia puede validarse mediante el script de prueba correspondiente, que reproduce de forma controlada la transición:
+El mecanismo de persistencia puede validarse mediante el script de prueba correspondiente (scripts/demo_upload_state.py), que reproduce de forma controlada la transición:
 
 ```text
 PENDING → FAILED → UPLOADED
@@ -807,6 +809,111 @@ La arquitectura mantiene separados el ciclo de inferencia, la distribución de m
 
 # 11. Cloud
 
-La implementación del procesamiento Cloud se incorporará en esta sección una vez completados los componentes correspondientes.
+El procesamiento Cloud se implementó mediante **Azure Data Lake Storage (ADLS)** 
+y **Azure Databricks**, siguiendo una arquitectura Medallion:
 
-La arquitectura prevista parte de los resultados recibidos en **Landing** y contempla su procesamiento mediante una arquitectura Medallion, su integración con los datos maestros y la generación de conjuntos de datos preparados para su posterior explotación.
+**Landing → Bronze → Silver → Gold → Detección de anomalías**
+
+Los notebooks desarrollados se encuentran en:
+
+```text
+cloud/
+└── lakehouse/
+    ├── 01_bronze_ingestion
+    ├── 02_silver_processing
+    ├── 03_gold_analytics
+    └── 04_anomaly_detection
+
+## 11.1 Landing
+
+Los ficheros `egg_prediction.csv` enviados desde los dispositivos Edge se almacenan inicialmente en la zona **Landing** de ADLS, organizados por granja y fecha:
+
+```text
+landing/<farm_id>/<YYYY>/<MM>/<DD>/egg_prediction.csv
+```
+
+## 11.2 Bronze
+
+El notebook `01_bronze_ingestion` realiza la ingesta de los ficheros almacenados en Landing:
+
+- Lee los ficheros CSV.
+- Añade información de trazabilidad.
+- Almacena los datos en formato **Delta Lake**.
+
+Salida:
+
+```text
+lakehouse/bronze/egg_predictions
+```
+
+## 11.3 Silver
+
+El notebook `02_silver_processing` valida y enriquece los resultados de inferencia utilizando los datos maestros almacenados en **Azure Database for PostgreSQL**.
+
+Databricks se conecta a PostgreSQL mediante **JDBC** y relaciona los resultados de inferencia con los datos maestros utilizando:
+
+```text
+farm_id + house_number + cage_id
+```
+Salida:
+
+```text
+lakehouse/silver/egg_predictions
+```
+
+## 11.4 Gold
+
+El notebook `03_gold_analytics` genera conjuntos de datos preparados para su explotación analítica.
+
+### Daily production
+
+`daily_production` agrega los resultados por granja, nave, batería y día, generando métricas de producción y calidad.
+
+Salida:
+
+```text
+lakehouse/gold/daily_production
+```
+
+### Spatial monitoring
+
+`spatial_monitoring` agrega los resultados por batería, nivel, lado y grupos de posiciones, permitiendo analizar patrones espaciales dentro de cada batería.
+
+Salida:
+
+```text
+lakehouse/gold/spatial_monitoring
+```
+
+## 11.5 Detección de anomalías
+
+El notebook `04_anomaly_detection` utiliza los conjuntos de datos Gold para identificar automáticamente dos tipos de anomalías:
+
+- **Anomalías temporales:** desviaciones de producción respecto al comportamiento histórico de cada batería.
+- **Anomalías espaciales:** zonas con un comportamiento anómalo persistente respecto al resto de la batería.
+
+El resultado se almacena en:
+
+```text
+lakehouse/gold/detected_anomalies
+```
+
+## 11.6 Orquestación
+
+Los cuatro notebooks se integraron en un **Databricks Workflow**, estableciendo las dependencias necesarias entre las distintas etapas:
+
+```text
+01_bronze_ingestion
+        ↓
+02_silver_processing
+        ↓
+03_gold_analytics
+        ↓
+04_anomaly_detection
+```
+
+El workflow completo se ejecutó satisfactoriamente, validando la automatización del pipeline Cloud desde la ingesta de los datos hasta la generación de los conjuntos analíticos y la detección de anomalías.
+
+12. Aplicación de Streamlit
+
+Debido a los créditos de subscripción de Azure Student no se se pudo realizar la visualización en la plataforma Cloud, pero creamos la aplicación en local cloud/app/app.py. Para ello, en scripts se generaron los datos de entrada para la aplicación (generate_data_streamlit.py). Este apartado tiene su propio README.md donde explica como levantar la aplicación. 

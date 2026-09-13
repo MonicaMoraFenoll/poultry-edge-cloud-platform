@@ -1,17 +1,11 @@
-CREATE DATABASE IF NOT EXISTS poultry_master_data;
-
-USE poultry_master_data;
-
-
 CREATE TABLE farm (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     location VARCHAR(150) NOT NULL
-) ENGINE=InnoDB;
-
+);
 
 CREATE TABLE house (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     farm_id INT NOT NULL,
     house_number INT NOT NULL,
 
@@ -21,11 +15,10 @@ CREATE TABLE house (
 
     CONSTRAINT uq_house
         UNIQUE (farm_id, house_number)
-) ENGINE=InnoDB;
-
+);
 
 CREATE TABLE battery (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     house_id INT NOT NULL,
     battery_number INT NOT NULL,
     number_of_levels INT NOT NULL,
@@ -43,15 +36,14 @@ CREATE TABLE battery (
 
     CONSTRAINT chk_cages_per_side
         CHECK (cages_per_side > 0)
-) ENGINE=InnoDB;
-
+);
 
 CREATE TABLE cage (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     battery_id INT NOT NULL,
     cage_id INT NOT NULL,
     level INT NOT NULL,
-    side ENUM('FRONT', 'BACK') NOT NULL,
+    side VARCHAR(10) NOT NULL,
     position INT NOT NULL,
 
     CONSTRAINT fk_cage_battery
@@ -59,16 +51,14 @@ CREATE TABLE cage (
         REFERENCES battery(id),
 
     CONSTRAINT uq_cage_position
-        UNIQUE (
-            battery_id,
-            level,
-            side,
-            position
-        ),
+        UNIQUE (battery_id, level, side, position),
 
     CONSTRAINT chk_cage_level
         CHECK (level > 0),
 
     CONSTRAINT chk_cage_position
-        CHECK (position > 0)
-) ENGINE=InnoDB;
+        CHECK (position > 0),
+
+    CONSTRAINT chk_cage_side
+        CHECK (side IN ('FRONT', 'BACK'))
+);

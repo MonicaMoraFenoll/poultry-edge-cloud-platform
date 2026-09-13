@@ -2,9 +2,9 @@
 
 ## Descripción
 
-Este módulo contiene la base de datos relacional utilizada para gestionar los datos maestros asociados a las explotaciones avícolas.
+Este módulo contiene la definición de la base de datos relacional utilizada para gestionar los datos maestros asociados a las explotaciones avícolas.
 
-El objetivo de la base de datos es proporcionar el contexto físico y jerárquico necesario para interpretar los fenotipos digitales generados por la plataforma, como el número de huevos detectados por jaula.
+La base de datos se despliega utilizando **Azure Database for PostgreSQL** y proporciona el contexto físico y jerárquico necesario para interpretar los fenotipos digitales generados por la plataforma, como el número de huevos detectados por jaula.
 
 ```text
 Granja
@@ -12,6 +12,10 @@ Granja
       └── Batería
            └── Jaula
 ```
+
+Los datos maestros se mantienen separados de los resultados de inferencia generados en los dispositivos Edge. Posteriormente, ambos conjuntos de información se integran durante el procesamiento de datos en Cloud.
+
+---
 
 ## Modelo de datos
 
@@ -22,7 +26,7 @@ Representa una explotación avícola.
 Principales atributos:
 
 - `id`: clave primaria interna.
-- `name`: nombre de la granja.
+- `name`: identificador operativo de la granja.
 - `location`: localización de la granja.
 
 ### Nave (`house`)
@@ -70,6 +74,8 @@ La posición física de una jaula queda definida por su batería, nivel, lado y 
 
 El `cage_id` es único dentro de una nave, aunque puede repetirse en naves diferentes.
 
+---
+
 ## Relaciones
 
 El modelo utiliza relaciones uno a muchos:
@@ -86,6 +92,8 @@ De esta forma, a partir de una jaula es posible recuperar todo su contexto físi
 Jaula → Batería → Nave → Granja → Localización
 ```
 
+---
+
 ## Estructura del módulo
 
 ```text
@@ -97,8 +105,48 @@ database/
     └── sample_master_data.sql
 ```
 
-- `schema/001_create_master_data.sql`: define el esquema relacional, las claves primarias y foráneas y las restricciones de integridad.
+- `schema/001_create_master_data.sql`: define el esquema PostgreSQL, las claves primarias y foráneas y las restricciones de integridad.
 - `seed/sample_master_data.sql`: genera datos maestros ficticios para realizar pruebas y demostrar el funcionamiento del modelo.
+
+---
+
+## Despliegue en Azure PostgreSQL
+
+Para el prototipo, la base de datos de datos maestros se despliega mediante **Azure Database for PostgreSQL – Flexible Server**.
+
+Dentro del servidor se crea la base de datos:
+
+```text
+poultry_master_data
+```
+
+El esquema puede inicializarse mediante:
+
+```powershell
+psql `
+  -h <POSTGRES_SERVER> `
+  -p 5432 `
+  -d poultry_master_data `
+  -U <POSTGRES_USER> `
+  -W `
+  -f "database\schema\001_create_master_data.sql"
+```
+
+Los datos ficticios utilizados para las pruebas pueden cargarse posteriormente mediante:
+
+```powershell
+psql `
+  -h <POSTGRES_SERVER> `
+  -p 5432 `
+  -d poultry_master_data `
+  -U <POSTGRES_USER> `
+  -W `
+  -f "database\seed\sample_master_data.sql"
+```
+
+Las credenciales de acceso a PostgreSQL no se almacenan en el repositorio.
+
+---
 
 ## Datos de ejemplo
 
@@ -112,13 +160,69 @@ Cada granja contiene varias naves y baterías con diferentes configuraciones fí
 
 Las baterías pueden disponer de entre 2 y 4 niveles y hasta 500 jaulas por lado.
 
-Los identificadores de jaula del conjunto de ejemplo se generan secuencialmente dentro de cada nave, comenzando en `1000`. Por tanto, un mismo `cage_id` puede aparecer en naves diferentes, pero no se repite dentro de una misma nave.
+Los identificadores de jaula se generan secuencialmente dentro de cada nave, comenzando en `1000`. Por tanto, un mismo `cage_id` puede aparecer en naves diferentes, pero no se repite dentro de una misma nave.
+
+---
+
+## Integración con los datos de inferencia
+
+Los dispositivos Edge no necesitan almacenar toda la estructura física de la instalación en cada resultado de inferencia.
+
+Cada predicción contiene los identificadores operativos necesarios para localizar la jaula:
+
+```text
+farm_id
+house_number
+cage_id
+```
+
+Estos campos permiten relacionar los resultados de inferencia con los datos maestros almacenados en PostgreSQL.
+
+Durante el procesamiento en Cloud, los datos maestros permiten enriquecer las predicciones con información como:
+
+```text
+battery_number
+level
+side
+position
+location
+```
+
+De esta forma, la información física se mantiene centralizada y no se replica innecesariamente en los resultados generados por los dispositivos Edge.
+
+---
+
+## Integración con la arquitectura Cloud
+
+La base de datos de datos maestros forma parte de la arquitectura Cloud de la plataforma.
+
+```text
+Edge
+ │
+ │ resultados de inferencia
+ ▼
+ADLS Landing
+ │
+ ▼
+Databricks
+ │
+ ├── Bronze
+ │
+ └── Silver ◄──── Azure PostgreSQL
+                    Master Data
+```
+
+Los resultados procedentes de los dispositivos Edge se almacenan inicialmente en **Azure Data Lake Storage** y se procesan mediante **Databricks**.
+
+Durante la construcción de la capa Silver, los datos de inferencia se combinan con los datos maestros almacenados en PostgreSQL para incorporar el contexto físico de cada jaula.
+
+---
 
 ## Finalidad
 
 El modelo de datos maestros permite asociar los fenotipos digitales generados por la plataforma con el contexto físico en el que se han obtenido.
 
-Por ejemplo, un fenotipo correspondiente al número de huevos detectados en una jaula podrá posteriormente contextualizarse y analizarse según:
+Por ejemplo, un fenotipo correspondiente al número de huevos detectados en una jaula puede contextualizarse y analizarse según:
 
 - granja y localización;
 - nave;
@@ -127,4 +231,4 @@ Por ejemplo, un fenotipo correspondiente al número de huevos detectados en una 
 - lado de la batería;
 - posición longitudinal.
 
-Esta estructura permite realizar análisis espaciales de los fenotipos generados sin almacenar información física redundante en los propios registros de fenotipos.
+Esta separación entre **datos maestros** y **datos de inferencia** permite mantener una única fuente de información sobre la estructura física de las explotaciones y facilita la incorporación de nuevos fenotipos digitales sin duplicar esta información en cada conjunto de resultados.
