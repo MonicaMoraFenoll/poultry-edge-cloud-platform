@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+
 from pathlib import Path
 
 import mlflow
+
 from mlflow import MlflowClient
 
 
 DEFAULT_TRACKING_URI = "http://127.0.0.1:5000"
+
 DEFAULT_MODEL_NAME = "egg_detector"
+
 DEFAULT_EXPERIMENT_NAME = "mock-yolo-model-registration"
 
 
@@ -18,14 +22,44 @@ def register_mock_model(
     model_name: str,
     tracking_uri: str,
 ) -> None:
+    """
+    Register a mock YOLO model in the MLflow Model Registry.
+
+    The model file is logged as an MLflow artifact, registered as a new
+    model version, enriched with descriptive tags, and assigned a
+    farm-specific production alias.
+
+    Parameters
+    ----------
+    model_path:
+        Path to the mock YOLO model file.
+
+    farm_id:
+        Identifier of the farm associated with the model version.
+
+    model_name:
+        Name of the registered model in MLflow.
+
+    tracking_uri:
+        URI of the MLflow Tracking Server.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the specified mock model file does not exist.
+    """
+
     if not model_path.is_file():
         raise FileNotFoundError(
             f"Mock model file not found: '{model_path}'."
         )
 
+    # Each farm receives its own production alias while sharing
+    # the same registered model name.
     alias = f"{farm_id}_production"
 
     mlflow.set_tracking_uri(tracking_uri)
+
     mlflow.set_experiment(
         DEFAULT_EXPERIMENT_NAME
     )
@@ -41,6 +75,7 @@ def register_mock_model(
         # Run metadata
         # ----------------------------------------------------
 
+        # Store descriptive information about the model registration run.
         mlflow.log_param(
             "model_name",
             model_name,
@@ -65,6 +100,7 @@ def register_mock_model(
         # Store model artifact
         # ----------------------------------------------------
 
+        # Log the mock YOLO weights inside the current MLflow run.
         mlflow.log_artifact(
             str(model_path),
             artifact_path="model",
@@ -78,6 +114,8 @@ def register_mock_model(
         # Create registered model if necessary
         # ----------------------------------------------------
 
+        # Create the registry entry the first time the model is used.
+        # If it already exists, the script continues with a new version.
         try:
             client.create_registered_model(
                 model_name
@@ -98,6 +136,7 @@ def register_mock_model(
         # Create new version
         # ----------------------------------------------------
 
+        # Register the artifact generated in this run as a new version.
         model_version = (
             client.create_model_version(
                 name=model_name,
@@ -118,6 +157,8 @@ def register_mock_model(
         # Add version tags
         # ----------------------------------------------------
 
+        # Tags describe the intended farm, task, architecture,
+        # and simulated nature of the registered model.
         client.set_model_version_tag(
             name=model_name,
             version=version,
@@ -150,6 +191,8 @@ def register_mock_model(
         # Assign farm-specific production alias
         # ----------------------------------------------------
 
+        # The alias allows the Edge application to resolve the model
+        # version currently assigned to production for this farm.
         client.set_registered_model_alias(
             name=model_name,
             alias=alias,
@@ -161,33 +204,51 @@ def register_mock_model(
         # ----------------------------------------------------
 
         print()
+
         print(
             "Model registered successfully"
         )
+
         print(
             "-----------------------------"
         )
+
         print(
             f"Model name : {model_name}"
         )
+
         print(
             f"Version    : {version}"
         )
+
         print(
             f"Farm       : {farm_id}"
         )
+
         print(
             f"Alias      : {alias}"
         )
+
         print(
             f"Run ID     : {run_id}"
         )
+
         print(
             f"Artifact   : {source}"
         )
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for mock model registration.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed model path, farm identifier, registered model name,
+        and MLflow Tracking Server URI.
+    """
+
     parser = argparse.ArgumentParser(
         description=(
             "Register a mock YOLO model in "
@@ -227,6 +288,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Parse command-line arguments and register the mock model in MLflow.
+    """
+
     args = parse_args()
 
     register_mock_model(

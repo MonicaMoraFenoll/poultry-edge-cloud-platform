@@ -12,6 +12,8 @@ from poultry_edge.cloud_uploader import (
 def test_upload_file_to_adls_success(
     tmp_path,
 ):
+    """Verify that a valid local file is uploaded successfully."""
+
     local_path = (
         tmp_path / "egg_prediction.csv"
     )
@@ -22,6 +24,7 @@ def test_upload_file_to_adls_success(
 
     local_size = local_path.stat().st_size
 
+    # Mock the remote file metadata so its size matches the local file.
     file_client = MagicMock()
 
     file_client.get_file_properties.return_value = (
@@ -70,6 +73,8 @@ def test_upload_file_to_adls_success(
 def test_upload_file_to_adls_fails_when_local_file_does_not_exist(
     tmp_path,
 ):
+    """Verify that a missing local file raises FileNotFoundError."""
+
     local_path = (
         tmp_path / "missing.csv"
     )
@@ -90,12 +95,16 @@ def test_upload_file_to_adls_fails_when_local_file_does_not_exist(
             ),
         )
 
+    # No Azure operation should be attempted when the source file
+    # does not exist locally.
     service_client.get_file_system_client.assert_not_called()
 
 
 def test_upload_file_to_adls_fails_when_remote_size_is_different(
     tmp_path,
 ):
+    """Verify that a remote size mismatch is treated as an upload failure."""
+
     local_path = (
         tmp_path / "egg_prediction.csv"
     )
@@ -108,6 +117,7 @@ def test_upload_file_to_adls_fails_when_remote_size_is_different(
 
     file_client = MagicMock()
 
+    # Simulate an incorrect remote file size after the upload.
     file_client.get_file_properties.return_value = (
         SimpleNamespace(
             size=local_size + 100,
@@ -144,6 +154,8 @@ def test_upload_file_to_adls_fails_when_remote_size_is_different(
 def test_upload_file_to_adls_passes_overwrite_false(
     tmp_path,
 ):
+    """Verify that overwrite=False is forwarded to the Azure client."""
+
     local_path = (
         tmp_path / "egg_prediction.csv"
     )
@@ -183,6 +195,7 @@ def test_upload_file_to_adls_passes_overwrite_false(
         overwrite=False,
     )
 
+    # Inspect the arguments forwarded to the mocked Azure upload call.
     _, kwargs = (
         file_client.upload_data.call_args
     )

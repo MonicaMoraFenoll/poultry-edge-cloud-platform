@@ -9,6 +9,23 @@ def write_config(
     tmp_path: Path,
     content: str,
 ) -> Path:
+    """
+    Write a temporary Edge YAML configuration file for testing.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary directory provided by pytest.
+
+    content:
+        YAML content to write into the configuration file.
+
+    Returns
+    -------
+    Path
+        Path of the generated temporary configuration file.
+    """
+
     config_path = tmp_path / "farm_01.yml"
 
     config_path.write_text(
@@ -22,6 +39,8 @@ def write_config(
 def test_load_valid_edge_config(
     tmp_path,
 ):
+    """Verify that a valid YAML configuration is loaded correctly."""
+
     config_path = write_config(
         tmp_path,
         """
@@ -89,6 +108,8 @@ inference:
 def test_supported_extensions_are_normalized(
     tmp_path,
 ):
+    """Verify that image extensions are normalized and deduplicated."""
+
     config_path = write_config(
         tmp_path,
         """
@@ -132,6 +153,8 @@ inference:
 def test_model_alias_defaults_to_production(
     tmp_path,
 ):
+    """Verify that the model alias defaults to 'production'."""
+
     config_path = write_config(
         tmp_path,
         """
@@ -167,6 +190,8 @@ inference:
 def test_missing_config_file_raises_error(
     tmp_path,
 ):
+    """Verify that a missing configuration file raises FileNotFoundError."""
+
     config_path = (
         tmp_path
         / "missing.yml"
@@ -184,6 +209,8 @@ def test_missing_config_file_raises_error(
 def test_missing_required_section_raises_error(
     tmp_path,
 ):
+    """Verify that a missing required configuration section raises an error."""
+
     config_path = write_config(
         tmp_path,
         """
@@ -220,6 +247,8 @@ model:
 def test_empty_supported_extensions_raises_error(
     tmp_path,
 ):
+    """Verify that an empty supported-extensions list is rejected."""
+
     config_path = write_config(
         tmp_path,
         """
@@ -260,6 +289,8 @@ inference:
 def test_missing_upload_section_raises_error(
     tmp_path,
 ):
+    """Verify that the upload configuration section is required."""
+
     config_path = write_config(
         tmp_path,
         """
@@ -298,6 +329,8 @@ inference:
 def test_empty_upload_state_database_raises_error(
     tmp_path,
 ):
+    """Verify that upload.state_database cannot be empty."""
+
     config_path = write_config(
         tmp_path,
         """

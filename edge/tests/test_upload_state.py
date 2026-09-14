@@ -14,6 +14,8 @@ from poultry_edge.upload_state import (
 def test_register_pending_upload(
     tmp_path: Path,
 ):
+    """Verify that a new upload is registered with PENDING status."""
+
     database_path = tmp_path / "upload_state.db"
     local_path = tmp_path / "egg_prediction.csv"
     remote_path = (
@@ -44,6 +46,8 @@ def test_register_pending_upload(
 def test_failed_upload_is_retried(
     tmp_path: Path,
 ):
+    """Verify that a failed upload remains available for retry."""
+
     database_path = tmp_path / "upload_state.db"
     local_path = tmp_path / "egg_prediction.csv"
     remote_path = (
@@ -80,6 +84,8 @@ def test_failed_upload_is_retried(
 def test_successful_upload_is_not_pending(
     tmp_path: Path,
 ):
+    """Verify that a successful upload is removed from the pending set."""
+
     database_path = tmp_path / "upload_state.db"
     local_path = tmp_path / "egg_prediction.csv"
     remote_path = (
@@ -111,6 +117,8 @@ def test_successful_upload_is_not_pending(
 def test_existing_upload_is_not_registered_twice(
     tmp_path: Path,
 ):
+    """Verify that registering the same upload twice does not create duplicates."""
+
     database_path = tmp_path / "upload_state.db"
     local_path = tmp_path / "egg_prediction.csv"
     remote_path = (

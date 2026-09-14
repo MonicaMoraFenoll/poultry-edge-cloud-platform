@@ -23,6 +23,32 @@ def make_result(
     model_version: str = "3",
     model_alias: str = "production",
 ) -> InferenceResult:
+    """
+    Build a valid inference result for output-writer tests.
+
+    Parameters
+    ----------
+    farm_id:
+        Farm identifier included in the result.
+
+    processing_date:
+        Processing date stored in the result.
+
+    model_name:
+        Registered model name associated with the inference.
+
+    model_version:
+        Model version associated with the inference.
+
+    model_alias:
+        Model alias associated with the inference.
+
+    Returns
+    -------
+    InferenceResult
+        A complete inference result with deterministic test values.
+    """
+
     return InferenceResult(
         farm_id=farm_id,
         house_number="house_01",
@@ -46,6 +72,8 @@ def make_result(
 
 
 def test_build_daily_output_directory(tmp_path):
+    """Verify that the daily output directory follows the YYYY/MM/DD hierarchy."""
+
     processing_date = date(2026, 8, 3)
 
     output_directory = build_daily_output_directory(
@@ -62,6 +90,8 @@ def test_build_daily_output_directory(tmp_path):
 
 
 def test_build_daily_output_file(tmp_path):
+    """Verify that the daily CSV path is built inside the expected date directory."""
+
     processing_date = date(2026, 8, 3)
 
     output_file = build_daily_output_file(
@@ -79,10 +109,13 @@ def test_build_daily_output_file(tmp_path):
 
 
 def test_result_to_csv_row():
+    """Verify that an inference result is converted to the expected CSV schema."""
+
     result = make_result()
 
     row = _result_to_csv_row(result)
 
+    # Preserve the exact field order defined by the output schema.
     assert list(row.keys()) == CSV_FIELD_NAMES
 
     assert row["farm_id"] == "farm_01"
@@ -97,6 +130,8 @@ def test_result_to_csv_row():
 
 
 def test_validate_results_valid():
+    """Verify that a consistent batch of inference results passes validation."""
+
     results = [
         make_result(),
         make_result(),
@@ -110,6 +145,8 @@ def test_validate_results_valid():
 
 
 def test_validate_results_wrong_farm():
+    """Verify that results from a different farm are rejected."""
+
     results = [
         make_result(),
         make_result(farm_id="farm_02"),
@@ -127,6 +164,8 @@ def test_validate_results_wrong_farm():
 
 
 def test_validate_results_wrong_processing_date():
+    """Verify that results from a different processing date are rejected."""
+
     results = [
         make_result(),
         make_result(processing_date="2026-08-04"),
@@ -144,6 +183,8 @@ def test_validate_results_wrong_processing_date():
 
 
 def test_validate_results_different_model_name():
+    """Verify that all results in a batch must use the same registered model."""
+
     results = [
         make_result(),
         make_result(model_name="other_model"),
@@ -161,6 +202,8 @@ def test_validate_results_different_model_name():
 
 
 def test_validate_results_different_model_version():
+    """Verify that all results in a batch must use the same model version."""
+
     results = [
         make_result(),
         make_result(model_version="4"),
@@ -178,6 +221,8 @@ def test_validate_results_different_model_version():
 
 
 def test_validate_results_different_model_alias():
+    """Verify that all results in a batch must use the same model alias."""
+
     results = [
         make_result(),
         make_result(model_alias="staging"),
@@ -195,6 +240,8 @@ def test_validate_results_different_model_alias():
 
 
 def test_write_inference_results(tmp_path):
+    """Verify that inference results are written correctly to the daily CSV file."""
+
     results = [
         make_result(),
         make_result(),
@@ -218,6 +265,7 @@ def test_write_inference_results(tmp_path):
     assert output_file == expected_file
     assert output_file.exists()
 
+    # Read the generated CSV back to verify both schema and persisted values.
     with output_file.open(
         mode="r",
         encoding="utf-8",
@@ -244,6 +292,8 @@ def test_write_inference_results(tmp_path):
 
 
 def test_write_inference_results_creates_directories(tmp_path):
+    """Verify that missing output directories are created automatically."""
+
     results = [make_result()]
 
     output_file = write_inference_results(
@@ -259,6 +309,8 @@ def test_write_inference_results_creates_directories(tmp_path):
 
 
 def test_write_inference_results_empty_results(tmp_path):
+    """Verify that no output file is created when the result list is empty."""
+
     output_file = write_inference_results(
         results=[],
         outputs_root_directory=tmp_path,
@@ -272,6 +324,8 @@ def test_write_inference_results_empty_results(tmp_path):
 def test_write_inference_results_existing_file_without_overwrite(
     tmp_path,
 ):
+    """Verify that an existing CSV is protected when overwrite is disabled."""
+
     results = [make_result()]
 
     output_file = write_inference_results(
@@ -300,6 +354,8 @@ def test_write_inference_results_existing_file_without_overwrite(
 def test_write_inference_results_overwrites_existing_file(
     tmp_path,
 ):
+    """Verify that an existing daily CSV can be replaced when overwrite is enabled."""
+
     first_result = make_result()
 
     output_file = write_inference_results(
@@ -324,6 +380,8 @@ def test_write_inference_results_overwrites_existing_file(
 
 
 def test_temporary_file_is_removed_after_success(tmp_path):
+    """Verify that the temporary CSV file is removed after an atomic write succeeds."""
+
     results = [make_result()]
 
     output_file = write_inference_results(
@@ -333,6 +391,7 @@ def test_temporary_file_is_removed_after_success(tmp_path):
         processing_date=date(2026, 8, 3),
     )
 
+    # The writer uses a temporary file before replacing the final CSV.
     temporary_file = output_file.with_suffix(
         output_file.suffix + ".tmp"
     )

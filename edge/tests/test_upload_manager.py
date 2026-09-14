@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from unittest.mock import MagicMock, patch
 
 from poultry_edge.upload_manager import (
@@ -14,6 +15,8 @@ from poultry_edge.upload_state import (
 def test_process_pending_uploads_continues_after_failure(
     tmp_path: Path,
 ):
+    """Verify that one failed upload does not stop the remaining transfers."""
+
     database_path = tmp_path / "upload_state.db"
 
     initialize_upload_database(
@@ -50,13 +53,13 @@ def test_process_pending_uploads_continues_after_failure(
 
     service_client = MagicMock()
 
-    # First upload succeeds.
-    # Second upload fails.
-    # Third upload succeeds.
+    # Simulate a batch where:
+    # - the first upload succeeds,
+    # - the second upload fails,
+    # - the third upload succeeds.
     with patch(
         "poultry_edge.upload_manager.upload_file_to_adls"
     ) as mock_upload:
-
         mock_upload.side_effect = [
             None,
             ConnectionError(
@@ -76,9 +79,10 @@ def test_process_pending_uploads_continues_after_failure(
     assert successful == 2
     assert failed == 1
 
+    # All files must be attempted even if one upload fails.
     assert mock_upload.call_count == 3
 
-    # Only the failed file should remain pending.
+    # Only the failed file should remain available for retry.
     pending = get_pending_uploads(
         database_path
     )

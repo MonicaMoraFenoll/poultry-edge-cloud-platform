@@ -20,6 +20,21 @@ ACTIVE_VERSION = "4"
 
 
 def build_model_config(tmp_path: Path) -> ModelConfig:
+    """
+    Build a temporary model configuration for testing.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    ModelConfig
+        Model configuration using the temporary directory as the
+        local model storage root.
+    """
+
     return ModelConfig(
         registered_name=MODEL_NAME,
         alias=MODEL_ALIAS,
@@ -31,6 +46,23 @@ def build_version_directory(
     model_config: ModelConfig,
     version: str,
 ) -> Path:
+    """
+    Build the expected local directory for a model version.
+
+    Parameters
+    ----------
+    model_config:
+        Model configuration containing the local model root.
+
+    version:
+        Model version identifier.
+
+    Returns
+    -------
+    Path
+        Expected directory of the specified local model version.
+    """
+
     return (
         model_config.local_root_directory
         / model_config.registered_name
@@ -43,7 +75,17 @@ def write_current_model(
     model_config: ModelConfig,
     version_directory: Path,
 ) -> None:
-    """Create a valid current.json for testing."""
+    """
+    Create valid current-model metadata for testing.
+
+    Parameters
+    ----------
+    model_config:
+        Model configuration used to determine the metadata location.
+
+    version_directory:
+        Local directory referenced by the generated current.json file.
+    """
 
     current_file = (
         model_config.local_root_directory
@@ -74,12 +116,15 @@ def test_synchronize_model_downloads_new_version(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that a model version is downloaded when it is not available locally."""
+
     model_config = build_model_config(tmp_path)
 
     fake_model_version = SimpleNamespace(
         version=ACTIVE_VERSION,
     )
 
+    # Simulate MLflow resolving the configured alias to the active version.
     class FakeMlflowClient:
         def get_model_version_by_alias(
             self,
@@ -96,6 +141,7 @@ def test_synchronize_model_downloads_new_version(
         FakeMlflowClient,
     )
 
+    # Simulate downloading a valid YOLO model without accessing MLflow.
     def fake_download_model_version(
         model_uri,
         destination_directory,
@@ -137,6 +183,8 @@ def test_synchronize_model_downloads_new_version(
         / "best.pt"
     ).is_file()
 
+    # Verify that synchronization also updates the persistent
+    # current-model metadata.
     current_model = read_current_model(
         model_config
     )
@@ -150,6 +198,8 @@ def test_synchronize_model_reuses_existing_local_version(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that an already available local model version is reused."""
+
     model_config = build_model_config(tmp_path)
 
     version_directory = build_version_directory(
@@ -190,6 +240,8 @@ def test_synchronize_model_reuses_existing_local_version(
         FakeMlflowClient,
     )
 
+    # Synchronization must not download a version that is already
+    # available and valid in local storage.
     def should_not_download(*args, **kwargs):
         raise AssertionError(
             "The model should not be downloaded again."
@@ -213,6 +265,8 @@ def test_synchronize_model_uses_local_fallback_when_mlflow_fails(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that a valid local model is used when MLflow is unavailable."""
+
     model_config = build_model_config(tmp_path)
 
     version_directory = build_version_directory(
@@ -233,11 +287,13 @@ def test_synchronize_model_uses_local_fallback_when_mlflow_fails(
         encoding="utf-8",
     )
 
+    # Create valid metadata representing the last synchronized model.
     write_current_model(
         model_config=model_config,
         version_directory=version_directory,
     )
 
+    # Simulate a connectivity failure while resolving the model alias.
     class FailingMlflowClient:
         def get_model_version_by_alias(
             self,
@@ -267,6 +323,8 @@ def test_synchronize_model_fails_when_mlflow_and_local_model_are_unavailable(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that synchronization fails when neither MLflow nor a local model is available."""
+
     model_config = build_model_config(tmp_path)
 
     class FailingMlflowClient:
@@ -300,6 +358,8 @@ def test_synchronize_model_fails_when_mlflow_and_local_model_are_unavailable(
 def test_read_current_model_fails_when_best_pt_is_missing(
     tmp_path,
 ):
+    """Verify that current-model metadata is rejected when best.pt is missing."""
+
     model_config = build_model_config(tmp_path)
 
     version_directory = build_version_directory(
@@ -329,6 +389,8 @@ def test_read_current_model_fails_when_best_pt_is_missing(
 def test_read_current_model_fails_when_current_json_is_missing(
     tmp_path,
 ):
+    """Verify that missing current-model metadata raises FileNotFoundError."""
+
     model_config = build_model_config(tmp_path)
 
     with pytest.raises(
@@ -343,6 +405,8 @@ def test_read_current_model_fails_when_current_json_is_missing(
 def test_read_current_model_fails_with_invalid_json(
     tmp_path,
 ):
+    """Verify that malformed current.json content is rejected."""
+
     model_config = build_model_config(tmp_path)
 
     current_file = (
@@ -356,6 +420,7 @@ def test_read_current_model_fails_with_invalid_json(
         exist_ok=True,
     )
 
+    # Write intentionally malformed JSON to validate metadata parsing.
     current_file.write_text(
         "{invalid json",
         encoding="utf-8",
@@ -373,6 +438,8 @@ def test_read_current_model_fails_with_invalid_json(
 def test_read_current_model_fails_when_json_is_not_object(
     tmp_path,
 ):
+    """Verify that current.json must contain a JSON object."""
+
     model_config = build_model_config(tmp_path)
 
     current_file = (
@@ -386,6 +453,8 @@ def test_read_current_model_fails_when_json_is_not_object(
         exist_ok=True,
     )
 
+    # A valid JSON value is not sufficient; model metadata must be
+    # represented as an object containing named fields.
     current_file.write_text(
         '["model", "version"]',
         encoding="utf-8",
@@ -403,6 +472,8 @@ def test_read_current_model_fails_when_json_is_not_object(
 def test_read_current_model_fails_when_required_field_is_missing(
     tmp_path,
 ):
+    """Verify that current-model metadata requires all expected fields."""
+
     model_config = build_model_config(tmp_path)
 
     current_file = (
@@ -416,6 +487,7 @@ def test_read_current_model_fails_when_required_field_is_missing(
         exist_ok=True,
     )
 
+    # The alias field is intentionally omitted.
     current_file.write_text(
         json.dumps(
             {
@@ -440,6 +512,8 @@ def test_read_current_model_fails_when_required_field_is_missing(
 def test_read_current_model_fails_when_registered_name_does_not_match(
     tmp_path,
 ):
+    """Verify that metadata for a different registered model is rejected."""
+
     model_config = build_model_config(tmp_path)
 
     version_directory = build_version_directory(
@@ -466,6 +540,7 @@ def test_read_current_model_fails_when_registered_name_does_not_match(
         / "current.json"
     )
 
+    # Simulate metadata that belongs to another registered model.
     current_file.write_text(
         json.dumps(
             {
@@ -491,6 +566,8 @@ def test_read_current_model_fails_when_registered_name_does_not_match(
 def test_read_current_model_fails_when_model_path_does_not_match(
     tmp_path,
 ):
+    """Verify that an unexpected model path in current.json is rejected."""
+
     model_config = build_model_config(tmp_path)
 
     wrong_directory = (
@@ -509,6 +586,8 @@ def test_read_current_model_fails_when_model_path_does_not_match(
         exist_ok=True,
     )
 
+    # Reference a location different from the directory derived from
+    # the configured model name and version.
     current_file.write_text(
         json.dumps(
             {
@@ -535,6 +614,8 @@ def test_download_model_version_success(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that a valid MLflow model artifact is installed locally."""
+
     destination_directory = (
         tmp_path
         / "models"
@@ -543,6 +624,8 @@ def test_download_model_version_success(
         / ACTIVE_VERSION
     )
 
+    # Simulate the directory returned by MLflow after downloading the
+    # model artifacts into its temporary destination.
     def fake_download_artifacts(
         artifact_uri,
         dst_path,
@@ -596,6 +679,8 @@ def test_download_model_version_fails_when_best_pt_is_missing(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that a downloaded model without best.pt is rejected."""
+
     destination_directory = (
         tmp_path
         / "models"
@@ -604,6 +689,8 @@ def test_download_model_version_fails_when_best_pt_is_missing(
         / ACTIVE_VERSION
     )
 
+    # Simulate an MLflow artifact that does not contain the required
+    # YOLO weights file.
     def fake_download_artifacts(
         artifact_uri,
         dst_path,
@@ -636,6 +723,8 @@ def test_download_model_version_fails_when_best_pt_is_missing(
             destination_directory=destination_directory,
         )
 
+    # An invalid download must not remain installed as a usable
+    # local model version.
     assert not destination_directory.exists()
 
 
@@ -643,6 +732,8 @@ def test_load_yolo_model_success(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that YOLO is initialized from the local best.pt weights."""
+
     model_directory = (
         tmp_path
         / "model"
@@ -673,6 +764,8 @@ def test_load_yolo_model_success(
 
     fake_yolo_model = object()
 
+    # Replace the real YOLO constructor so the test validates the
+    # weights path without loading an actual neural network.
     def fake_yolo(path):
         assert path == str(weights_path)
 
@@ -693,6 +786,8 @@ def test_load_yolo_model_success(
 def test_load_yolo_model_fails_when_model_directory_is_invalid(
     tmp_path,
 ):
+    """Verify that a local model directory without valid weights is rejected."""
+
     model_directory = (
         tmp_path
         / "model"
@@ -724,6 +819,8 @@ def test_load_yolo_model_fails_when_yolo_cannot_load_weights(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that errors raised while loading YOLO weights are propagated correctly."""
+
     model_directory = (
         tmp_path
         / "model"
@@ -750,6 +847,7 @@ def test_load_yolo_model_fails_when_yolo_cannot_load_weights(
         synchronized_at="2026-08-15T08:00:00+00:00",
     )
 
+    # Simulate Ultralytics failing while loading an existing weights file.
     def failing_yolo(path):
         raise RuntimeError(
             "Invalid weights"

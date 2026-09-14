@@ -7,6 +7,21 @@ from poultry_edge.pipeline import run_daily_pipeline
 
 
 def make_config(tmp_path):
+    """
+    Build a minimal Edge configuration for pipeline tests.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    SimpleNamespace
+        Minimal configuration containing the farm, image, inference,
+        model, and output settings required by the daily pipeline.
+    """
+
     return SimpleNamespace(
         farm=SimpleNamespace(
             id="farm_01",
@@ -25,6 +40,20 @@ def make_config(tmp_path):
 
 
 def make_local_model(tmp_path):
+    """
+    Build local model metadata for pipeline tests.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    SimpleNamespace
+        Minimal synchronized-model metadata required by the pipeline.
+    """
+
     return SimpleNamespace(
         registered_name="egg_detector",
         version="3",
@@ -38,6 +67,23 @@ def make_result(
     egg_count=2,
     inference_status="SUCCESS",
 ):
+    """
+    Build a minimal inference result for pipeline tests.
+
+    Parameters
+    ----------
+    egg_count:
+        Number of eggs detected in the mocked inference result.
+
+    inference_status:
+        Status associated with the mocked inference execution.
+
+    Returns
+    -------
+    SimpleNamespace
+        Minimal result containing the fields used by the pipeline summary.
+    """
+
     return SimpleNamespace(
         egg_count=egg_count,
         inference_status=inference_status,
@@ -48,6 +94,8 @@ def test_pipeline_returns_none_when_no_images(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that the pipeline exits early when no daily images are found."""
+
     config = make_config(tmp_path)
 
     synchronize_model = MagicMock()
@@ -87,6 +135,7 @@ def test_pipeline_returns_none_when_no_images(
 
     assert result is None
 
+    # No downstream processing should start when there are no images.
     synchronize_model.assert_not_called()
     load_yolo_model.assert_not_called()
     run_daily_inference.assert_not_called()
@@ -97,6 +146,8 @@ def test_pipeline_runs_complete_workflow(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that the complete daily pipeline is executed in the expected order."""
+
     config = make_config(tmp_path)
 
     processing_date = date(2026, 8, 3)
@@ -142,6 +193,8 @@ def test_pipeline_runs_complete_workflow(
         / "egg_prediction.csv"
     )
 
+    # Mock each pipeline stage so this test validates orchestration
+    # rather than the internal behavior of the individual modules.
     find_daily_images = MagicMock(
         return_value=image_paths,
     )
@@ -235,6 +288,8 @@ def test_pipeline_returns_none_when_writer_returns_none(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that the pipeline returns None when no output file is generated."""
+
     config = make_config(tmp_path)
 
     processing_date = date(2026, 8, 3)
@@ -290,6 +345,8 @@ def test_pipeline_passes_overwrite_false(
     tmp_path,
     monkeypatch,
 ):
+    """Verify that overwrite=False is forwarded to the output writer."""
+
     config = make_config(tmp_path)
 
     processing_date = date(2026, 8, 3)
@@ -345,6 +402,8 @@ def test_pipeline_passes_overwrite_false(
 
     assert output_file == expected_output
 
+    # Ensure the overwrite policy selected by the caller reaches
+    # the persistence layer unchanged.
     write_results_mock.assert_called_once_with(
         results=results,
         outputs_root_directory=config.outputs.root_directory,

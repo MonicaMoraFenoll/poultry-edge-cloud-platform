@@ -13,6 +13,18 @@ PROCESSING_DATE = date(2026, 6, 15)
 
 
 def create_file(path: Path, content: str = "mock") -> None:
+    """
+    Create a temporary file and any required parent directories.
+
+    Parameters
+    ----------
+    path:
+        Path of the file to create.
+
+    content:
+        Text content written to the file.
+    """
+
     path.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -25,6 +37,8 @@ def create_file(path: Path, content: str = "mock") -> None:
 
 
 def test_build_date_path():
+    """Verify that a date is converted into the expected YYYY/MM/DD path."""
+
     result = build_date_path(
         PROCESSING_DATE
     )
@@ -39,6 +53,8 @@ def test_build_date_path():
 def test_find_daily_images_returns_images_from_all_houses(
     tmp_path,
 ):
+    """Verify that daily images are discovered across all houses."""
+
     images_root = tmp_path / "images"
 
     image_1 = (
@@ -81,6 +97,8 @@ def test_find_daily_images_returns_images_from_all_houses(
 def test_find_daily_images_ignores_other_dates(
     tmp_path,
 ):
+    """Verify that images from dates other than the requested date are ignored."""
+
     images_root = tmp_path / "images"
 
     expected_image = (
@@ -118,6 +136,8 @@ def test_find_daily_images_ignores_other_dates(
 def test_find_daily_images_ignores_unsupported_extensions(
     tmp_path,
 ):
+    """Verify that files with unsupported extensions are ignored."""
+
     images_root = tmp_path / "images"
 
     expected_image = (
@@ -155,6 +175,8 @@ def test_find_daily_images_ignores_unsupported_extensions(
 def test_find_daily_images_returns_empty_list_when_day_has_no_images(
     tmp_path,
 ):
+    """Verify that an empty list is returned when no daily images exist."""
+
     images_root = tmp_path / "images"
 
     images_root.mkdir()
@@ -171,6 +193,8 @@ def test_find_daily_images_returns_empty_list_when_day_has_no_images(
 def test_find_daily_images_raises_error_when_root_does_not_exist(
     tmp_path,
 ):
+    """Verify that a missing images root directory raises FileNotFoundError."""
+
     images_root = tmp_path / "missing"
 
     with pytest.raises(
@@ -187,6 +211,8 @@ def test_find_daily_images_raises_error_when_root_does_not_exist(
 def test_find_daily_images_raises_error_when_extensions_are_empty(
     tmp_path,
 ):
+    """Verify that an empty supported-extensions collection is rejected."""
+
     images_root = tmp_path / "images"
 
     images_root.mkdir()

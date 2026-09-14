@@ -10,12 +10,14 @@ import pandas as pd
 # CONFIGURATION
 # ============================================================
 
+# Local paths used to reconstruct the datasets required by the dashboard.
 LANDING_ROOT = Path("data") / "outputs"
 OUTPUT_DIR = Path("data") / "dashboard"
 
 PRODUCTION_FILE = OUTPUT_DIR / "production_dashboard.csv"
 ANOMALIES_FILE = OUTPUT_DIR / "df_detected_anomalies.csv"
 
+# Number of consecutive cage positions included in each spatial group.
 POSITION_GROUP_SIZE = 50
 
 
@@ -77,9 +79,22 @@ def build_master_cages() -> pd.DataFrame:
     """
     Reconstruct the local master-data mapping used by the mock dataset.
 
-    cage_id starts at 1000 for each house and increases continuously through:
-        battery -> level -> side -> position
+    Cage IDs start at 1000 for each house and increase continuously
+    through battery, level, side, and cage position.
+
+    Returns
+    -------
+    pd.DataFrame
+        Master-data table mapping each cage to its farm, house,
+        battery, level, side, position, and spatial position group.
+
+    Raises
+    ------
+    RuntimeError
+        If duplicate cage identifiers are detected within the same
+        farm and house.
     """
+
     rows = []
 
     for farm_id, farm_cfg in FARMS.items():
@@ -104,10 +119,12 @@ def build_master_cages() -> pd.DataFrame:
                                     "cages_per_side": cfg["cages_per_side"],
                                 }
                             )
+
                             next_cage_id += 1
 
     master = pd.DataFrame(rows)
 
+    # Cage IDs must uniquely identify a cage inside each farm and house.
     if master.duplicated(
         ["farm_id", "house_number", "cage_id"]
     ).any():
@@ -131,6 +148,27 @@ def build_master_cages() -> pd.DataFrame:
 # ============================================================
 
 def read_landing_files() -> pd.DataFrame:
+    """
+    Read and combine all Edge inference CSV files from the Landing area.
+
+    The function discovers every ``egg_prediction.csv`` file below the
+    configured Landing root, combines them into a single DataFrame,
+    validates the required schema, and normalizes the main data types.
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined and normalized Landing dataset.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no Edge result files are found below the Landing root.
+
+    KeyError
+        If the input files do not contain the required columns.
+    """
+
     files = sorted(LANDING_ROOT.rglob("egg_prediction.csv"))
 
     if not files:
@@ -141,6 +179,7 @@ def read_landing_files() -> pd.DataFrame:
 
     frames = []
 
+    # Preserve the source file for traceability after concatenation.
     for file in files:
         df = pd.read_csv(file)
         df["source_file"] = str(file)
@@ -148,6 +187,8 @@ def read_landing_files() -> pd.DataFrame:
 
     landing = pd.concat(frames, ignore_index=True)
 
+    # Support Landing datasets generated with the previous house_id
+    # field name while normalizing the downstream schema.
     if "house_number" not in landing.columns:
         if "house_id" not in landing.columns:
             raise KeyError(
@@ -174,6 +215,7 @@ def read_landing_files() -> pd.DataFrame:
             f"Missing Landing columns: {sorted(missing)}"
         )
 
+    # Normalize identifiers and dates before Silver-like processing.
     landing["house_number"] = pd.to_numeric(
         landing["house_number"], errors="raise"
     ).astype(int)
@@ -186,6 +228,8 @@ def read_landing_files() -> pd.DataFrame:
         landing["capture_date"], errors="raise"
     ).dt.normalize()
 
+    # Invalid numeric predictions become null so they can be removed
+    # during the Silver-like cleaning stage.
     landing["egg_count"] = pd.to_numeric(
         landing["egg_count"], errors="coerce"
     )
@@ -208,9 +252,30 @@ def build_silver(
     landing: pd.DataFrame,
     master: pd.DataFrame,
 ) -> pd.DataFrame:
+    """
+    Clean Landing inference data and enrich it with master data.
+
+    Parameters
+    ----------
+    landing:
+        Raw combined inference records from the Landing area.
+
+    master:
+        Master-data mapping describing the physical cage structure.
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned and enriched Silver-like dataset.
+
+    Raises
+    ------
+    RuntimeError
+        If any inference record cannot be matched with the master data.
+    """
 
     # Keep SUCCESS rows with valid egg_count.
-    # confidence may be null when egg_count = 0.
+    # Confidence may be null when egg_count = 0.
     silver = landing[
         (landing["inference_status"] == "SUCCESS")
         & landing["egg_count"].notna()
@@ -218,6 +283,9 @@ def build_silver(
 
     silver["egg_count"] = silver["egg_count"].astype(int)
 
+    # Use every available observation identifier to remove repeated
+    # inference records while remaining compatible with datasets that
+    # may not contain image_name.
     duplicate_keys = [
         col
         for col in [
@@ -246,6 +314,7 @@ def build_silver(
         "position_group",
     ]
 
+    # Enrich inference records with the physical location of each cage.
     silver = silver.merge(
         master[enrichment],
         on=["farm_id", "house_number", "cage_id"],
@@ -253,6 +322,8 @@ def build_silver(
         validate="many_to_one",
     )
 
+    # Missing battery information indicates that an inference record
+    # could not be mapped to the reconstructed master data.
     if silver["battery_number"].isna().any():
         bad = silver.loc[
             silver["battery_number"].isna(),
@@ -285,6 +356,27 @@ def build_daily_production(
     silver: pd.DataFrame,
     master: pd.DataFrame,
 ) -> pd.DataFrame:
+    """
+    Build daily production metrics at battery level.
+
+    Parameters
+    ----------
+    landing:
+        Original Landing records, including failed inferences.
+
+    silver:
+        Cleaned and master-data-enriched inference records.
+
+    master:
+        Master-data mapping used to associate Landing records with
+        their corresponding battery.
+
+    Returns
+    -------
+    pd.DataFrame
+        Daily battery-level production metrics, error rates, temporal
+        baselines, and deviations.
+    """
 
     keys = [
         "farm_id",
@@ -293,6 +385,7 @@ def build_daily_production(
         "capture_date",
     ]
 
+    # Aggregate valid inference results at battery/day level.
     daily = silver.groupby(
         keys,
         as_index=False,
@@ -330,6 +423,8 @@ def build_daily_production(
         daily["mean_confidence"] = np.nan
 
     # Error rate uses original Landing rows, including ERROR rows.
+    # This metric therefore represents inference reliability rather
+    # than only the successfully processed Silver records.
     landing_err = landing.merge(
         master[
             [
@@ -396,6 +491,8 @@ def build_daily_production(
 
     daily["baseline_median"] = baselines
 
+    # Express the current daily production relative to the temporal
+    # baseline of the same battery.
     daily["deviation_pct"] = np.where(
         daily["baseline_median"].notna()
         & (daily["baseline_median"] != 0),
@@ -436,6 +533,20 @@ def build_daily_production(
 def build_spatial_monitoring(
     silver: pd.DataFrame,
 ) -> pd.DataFrame:
+    """
+    Build spatial production metrics for groups of cage positions.
+
+    Parameters
+    ----------
+    silver:
+        Cleaned and master-data-enriched inference records.
+
+    Returns
+    -------
+    pd.DataFrame
+        Spatial monitoring dataset containing production metrics,
+        cage ranges, battery-level spatial baselines, and deviations.
+    """
 
     keys = [
         "farm_id",
@@ -447,6 +558,7 @@ def build_spatial_monitoring(
         "capture_date",
     ]
 
+    # Aggregate valid records by physical cage group and day.
     spatial = silver.groupby(
         keys,
         as_index=False,
@@ -494,6 +606,8 @@ def build_spatial_monitoring(
         "capture_date",
     ]
 
+    # The median of the spatial groups within each battery/day acts
+    # as the reference for detecting local spatial deviations.
     medians = spatial.groupby(
         battery_day,
         as_index=False,
@@ -543,6 +657,7 @@ def build_spatial_monitoring(
     spatial["cage_id_min"] = (
         spatial["cage_id_min"].astype(int)
     )
+
     spatial["cage_id_max"] = (
         spatial["cage_id_max"].astype(int)
     )
@@ -561,6 +676,23 @@ def build_production_dashboard(
     daily: pd.DataFrame,
     spatial: pd.DataFrame,
 ) -> pd.DataFrame:
+    """
+    Combine temporal and spatial Gold-like metrics for Streamlit.
+
+    Parameters
+    ----------
+    daily:
+        Battery/day production dataset containing temporal metrics.
+
+    spatial:
+        Spatial monitoring dataset containing cage-group metrics.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dashboard-ready dataset preserving spatial resolution while
+        adding the corresponding battery/day production metrics.
+    """
 
     # One file for Streamlit, keeping spatial resolution
     # plus battery/day metrics.
@@ -571,6 +703,8 @@ def build_production_dashboard(
         "capture_date",
     ]
 
+    # Prefix daily metrics to distinguish battery-level values from
+    # the spatial metrics already present in the spatial dataset.
     daily2 = daily.rename(
         columns={
             "n_records": "battery_n_records",
@@ -588,6 +722,8 @@ def build_production_dashboard(
         }
     )
 
+    # Each spatial group receives the metrics of its corresponding
+    # battery and capture date.
     out = spatial.merge(
         daily2,
         on=keys,
@@ -621,11 +757,24 @@ def build_detected_anomalies(
     """
     Recreate the same 11 anomaly rows obtained in Databricks.
 
-    For SPATIAL anomalies, cage_id_min and cage_id_max are
-    derived from the master mapping so the dashboard can show
-    the actual cage IDs instead of only position_group.
+    For spatial anomalies, cage_id_min and cage_id_max are derived
+    from the master mapping so the dashboard can show the actual cage
+    IDs instead of only the position group.
+
+    Parameters
+    ----------
+    master:
+        Master-data mapping used to obtain the real cage-ID limits
+        associated with each spatial anomaly.
+
+    Returns
+    -------
+    pd.DataFrame
+        Final temporal and spatial anomaly dataset used by the dashboard.
     """
 
+    # These rows reproduce the final anomaly results previously
+    # obtained from the Databricks anomaly-detection workflow.
     rows = [
         [
             "farm_03", 1, 1, "2026-08-04",
@@ -711,6 +860,8 @@ def build_detected_anomalies(
         errors="coerce",
     )
 
+    # Nullable integer types preserve missing spatial dimensions
+    # for temporal anomalies.
     for col in [
         "house_number",
         "battery_number",
@@ -726,6 +877,8 @@ def build_detected_anomalies(
     # Add real cage ID limits to each spatial anomaly.
     # --------------------------------------------------------
 
+    # Derive the actual cage-ID range represented by every physical
+    # position group from the reconstructed master data.
     group_limits = (
         master.groupby(
             [
@@ -808,7 +961,26 @@ def validate_outputs(
     production: pd.DataFrame,
     anomalies: pd.DataFrame,
 ) -> None:
+    """
+    Validate the reconstructed dashboard datasets.
 
+    Parameters
+    ----------
+    production:
+        Dashboard-ready production dataset.
+
+    anomalies:
+        Final detected-anomalies dataset.
+
+    Raises
+    ------
+    RuntimeError
+        If the expected anomaly counts, spatial cage ranges, or
+        required production columns are not present.
+    """
+
+    # The reconstructed anomaly dataset must match the final
+    # Databricks result used by the dashboard.
     if len(anomalies) != 11:
         raise RuntimeError(
             f"Expected 11 anomalies, got {len(anomalies)}."
@@ -830,6 +1002,8 @@ def validate_outputs(
         anomalies["anomaly_type"] == "SPATIAL"
     ]
 
+    # Every spatial anomaly must identify the real cage range
+    # represented by its position group.
     if (
         spatial["cage_id_min"].isna().any()
         or spatial["cage_id_max"].isna().any()
@@ -861,26 +1035,41 @@ def validate_outputs(
 # ============================================================
 
 def main() -> None:
+    """
+    Reconstruct and save the local datasets required by the dashboard.
+
+    The workflow rebuilds master data, reads Landing results, applies
+    Silver-like cleaning and enrichment, creates Gold-like temporal
+    and spatial datasets, recreates the detected anomalies, validates
+    the outputs, and saves the final CSV files.
+    """
 
     print("1/6 Building local master data...")
+
     master = build_master_cages()
+
     print(f"  Master cages: {len(master):,}")
 
     print("2/6 Reading original Landing CSV files...")
+
     landing = read_landing_files()
+
     print(f"  Landing rows: {len(landing):,}")
 
     print(
         "3/6 Applying Silver-like cleaning + "
         "master-data integration..."
     )
+
     silver = build_silver(
         landing,
         master,
     )
+
     print(f"  Silver rows: {len(silver):,}")
 
     print("4/6 Building Gold-like production datasets...")
+
     daily = build_daily_production(
         landing,
         silver,
@@ -899,18 +1088,23 @@ def main() -> None:
     print(
         f"  Battery/day rows: {len(daily):,}"
     )
+
     print(
         f"  Spatial rows: {len(spatial):,}"
     )
+
     print(
         f"  Dashboard rows: {len(production):,}"
     )
 
     print("5/6 Recreating final detected anomalies...")
+
     anomalies = build_detected_anomalies(
         master
     )
 
+    # Validate the reconstructed datasets before exposing them
+    # to the dashboard.
     validate_outputs(
         production,
         anomalies,
@@ -945,6 +1139,7 @@ def main() -> None:
         exist_ok=True,
     )
 
+    # Format dates as ISO strings before exporting the dashboard CSV.
     production_out = production.copy()
 
     production_out["capture_date"] = (

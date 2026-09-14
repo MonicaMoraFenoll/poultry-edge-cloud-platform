@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import sqlite3
 
 from poultry_edge.upload_state import (
@@ -26,10 +27,32 @@ def get_upload_record(
     database_path: Path,
     local_path: Path,
 ) -> dict:
+    """
+    Retrieve one upload-state record from the SQLite database.
+
+    Parameters
+    ----------
+    database_path:
+        Path to the SQLite database containing the upload state.
+
+    local_path:
+        Local file path used as the record identifier.
+
+    Returns
+    -------
+    dict
+        Upload-state record containing status, attempt counters,
+        timestamps, paths, and the last recorded error.
+
+    Raises
+    ------
+    RuntimeError
+        If no upload record exists for the requested local path.
+    """
+
     with sqlite3.connect(
         database_path
     ) as connection:
-
         connection.row_factory = sqlite3.Row
 
         row = connection.execute(
@@ -61,6 +84,14 @@ def get_upload_record(
 def print_record(
     step: str,
 ) -> None:
+    """
+    Print the current upload-state record for the demo file.
+
+    Parameters
+    ----------
+    step:
+        Label describing the current step of the upload-state demo.
+    """
 
     record = get_upload_record(
         database_path=DATABASE_PATH,
@@ -101,8 +132,17 @@ def print_record(
 
 
 def main() -> None:
+    """
+    Demonstrate the complete upload-state transition workflow.
 
-    # Reproducible demo.
+    The demo recreates the SQLite state database and simulates
+    the transition of one output file through the following states:
+
+    PENDING -> FAILED -> UPLOADED
+    """
+
+    # Remove any previous demo database so each execution starts
+    # from a clean and reproducible state.
     if DATABASE_PATH.exists():
         DATABASE_PATH.unlink()
 
@@ -114,6 +154,7 @@ def main() -> None:
     # 1. File discovered
     # --------------------------------------------------------
 
+    # Register the generated result file as waiting to be uploaded.
     register_pending_upload(
         database_path=DATABASE_PATH,
         local_path=LOCAL_PATH,
@@ -128,6 +169,7 @@ def main() -> None:
     # 2. First attempt fails
     # --------------------------------------------------------
 
+    # Simulate a temporary cloud connectivity failure.
     mark_upload_failed(
         database_path=DATABASE_PATH,
         local_path=LOCAL_PATH,
@@ -144,6 +186,7 @@ def main() -> None:
     # 3. Connectivity restored
     # --------------------------------------------------------
 
+    # Simulate a successful retry after connectivity is restored.
     mark_upload_successful(
         database_path=DATABASE_PATH,
         local_path=LOCAL_PATH,
@@ -155,9 +198,11 @@ def main() -> None:
 
     print()
     print("=" * 80)
+
     print(
         "Upload state transition completed:"
     )
+
     print(
         "PENDING -> FAILED -> UPLOADED"
     )

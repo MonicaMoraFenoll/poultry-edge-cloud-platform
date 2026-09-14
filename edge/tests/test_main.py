@@ -6,6 +6,16 @@ from poultry_edge.main import main
 
 
 def make_config():
+    """
+    Build a minimal Edge configuration object for main-function tests.
+
+    Returns
+    -------
+    SimpleNamespace
+        Minimal configuration containing the farm identifier required
+        by the application entry point.
+    """
+
     return SimpleNamespace(
         farm=SimpleNamespace(
             id="farm_01",
@@ -16,6 +26,8 @@ def make_config():
 def test_main_success(
     monkeypatch,
 ):
+    """Verify that main returns success when the daily pipeline completes."""
+
     config = make_config()
 
     load_config_mock = MagicMock(
@@ -39,6 +51,7 @@ def test_main_success(
         MagicMock(),
     )
 
+    # Provide the MLflow endpoints expected by the application.
     monkeypatch.setenv(
         "MLFLOW_TRACKING_URI",
         "http://mlflow:5000",
@@ -66,6 +79,8 @@ def test_main_success(
 def test_main_uses_tracking_uri_as_registry_uri_by_default(
     monkeypatch,
 ):
+    """Verify that the tracking URI is reused when no registry URI is defined."""
+
     config = make_config()
 
     monkeypatch.setattr(
@@ -90,6 +105,7 @@ def test_main_uses_tracking_uri_as_registry_uri_by_default(
         "http://mlflow:5000",
     )
 
+    # Remove the explicit registry URI to test the fallback behavior.
     monkeypatch.delenv(
         "MLFLOW_REGISTRY_URI",
         raising=False,
@@ -110,7 +126,10 @@ def test_main_uses_tracking_uri_as_registry_uri_by_default(
 def test_main_returns_one_when_config_loading_fails(
     monkeypatch,
 ):
+    """Verify that main returns exit code 1 when configuration loading fails."""
+
     def failing_load_config(*args, **kwargs):
+        # Simulate an error raised while reading or validating the configuration.
         raise RuntimeError(
             "Invalid configuration"
         )
@@ -136,12 +155,15 @@ def test_main_returns_one_when_config_loading_fails(
 
     assert result == 1
 
+    # The pipeline must not start when configuration loading fails.
     pipeline_mock.assert_not_called()
 
 
 def test_main_returns_one_when_pipeline_fails(
     monkeypatch,
 ):
+    """Verify that main returns exit code 1 when the pipeline raises an error."""
+
     config = make_config()
 
     monkeypatch.setattr(
@@ -150,6 +172,7 @@ def test_main_returns_one_when_pipeline_fails(
     )
 
     def failing_pipeline(*args, **kwargs):
+        # Simulate an unexpected failure during daily pipeline execution.
         raise RuntimeError(
             "Pipeline failed"
         )

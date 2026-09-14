@@ -12,7 +12,10 @@ from poultry_edge.upload_state import (
 def test_discover_and_register_uploads(
     tmp_path: Path,
 ):
+    """Verify that discovered result files are registered with the expected remote paths."""
+
     output_root = tmp_path / "outputs"
+
     database_path = (
         tmp_path / "state" / "upload_state.db"
     )
@@ -27,7 +30,6 @@ def test_discover_and_register_uploads(
         / "08"
         / "01"
         / "egg_prediction.csv",
-
         output_root
         / "2026"
         / "08"
@@ -74,7 +76,10 @@ def test_discover_and_register_uploads(
 def test_discovery_does_not_duplicate_existing_records(
     tmp_path: Path,
 ):
+    """Verify that repeated discovery does not duplicate existing upload records."""
+
     output_root = tmp_path / "outputs"
+
     database_path = (
         tmp_path / "state" / "upload_state.db"
     )
@@ -101,7 +106,7 @@ def test_discovery_does_not_duplicate_existing_records(
         encoding="utf-8",
     )
 
-    # Run discovery twice.
+    # Run discovery twice to verify that registration is idempotent.
     discover_and_register_uploads(
         output_root=output_root,
         farm_id="farm_01",
@@ -124,6 +129,8 @@ def test_discovery_does_not_duplicate_existing_records(
 def test_missing_output_directory_returns_zero(
     tmp_path: Path,
 ):
+    """Verify that a missing output directory produces no registered uploads."""
+
     output_root = tmp_path / "missing_outputs"
 
     database_path = (

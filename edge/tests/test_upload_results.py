@@ -6,6 +6,8 @@ import poultry_edge.upload_results as upload_results
 
 
 def test_parse_args_default_config(monkeypatch):
+    """Verify that the default configuration path is used when no argument is provided."""
+
     monkeypatch.setattr(
         "sys.argv",
         ["poultry-edge-upload"],
@@ -17,6 +19,8 @@ def test_parse_args_default_config(monkeypatch):
 
 
 def test_main_runs_complete_upload_flow(monkeypatch, tmp_path):
+    """Verify that the upload entry point executes the complete upload workflow."""
+
     state_db = tmp_path / "uploads.db"
     output_dir = tmp_path / "outputs"
 
@@ -34,6 +38,8 @@ def test_main_runs_complete_upload_flow(monkeypatch, tmp_path):
 
     fake_service_client = object()
 
+    # Store arguments received by the mocked functions so the complete
+    # orchestration can be verified after main() finishes.
     calls = {}
 
     monkeypatch.setattr(
@@ -124,6 +130,8 @@ def test_main_runs_complete_upload_flow(monkeypatch, tmp_path):
 
 
 def test_main_handles_failed_uploads(monkeypatch, tmp_path):
+    """Verify that the upload entry point completes when some uploads fail."""
+
     state_db = tmp_path / "uploads.db"
     output_dir = tmp_path / "outputs"
 
@@ -171,6 +179,7 @@ def test_main_handles_failed_uploads(monkeypatch, tmp_path):
         lambda **kwargs: object(),
     )
 
+    # Simulate a batch with one successful upload and one failed upload.
     monkeypatch.setattr(
         upload_results,
         "process_pending_uploads",
